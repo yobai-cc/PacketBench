@@ -51,6 +51,25 @@ def test_client_page_replaces_placeholder_and_persists_config(tmp_path) -> None:
             assert row.enabled is False
             assert row.config_json["protocol"] == "UDP"
             assert row.config_json["hex_mode"] is True
+
+        # Test mutation is blocked while running
+        runtime_manager.client_runtime.running = True
+        try:
+            with testing_session_local() as db:
+                blocked_response = update_client_config(
+                    request,
+                    protocol="TCP",
+                    target_ip="10.0.0.1",
+                    target_port=80,
+                    hex_mode="off",
+                    user=user,
+                    db=db,
+                )
+                blocked_body = blocked_response.body.decode("utf-8")
+                assert "Client 正在运行，请先断开再修改配置" in blocked_body
+                assert "10.0.0.1" not in blocked_body
+        finally:
+            runtime_manager.client_runtime.running = False
     finally:
         runtime_manager.client_runtime.update_config(ClientRuntimeConfig())
 

@@ -12,15 +12,15 @@
     <form method="post" action="/client/config">
       <label>
         协议
-        <select name="protocol">
+        <select name="protocol" {% if client.running %}disabled{% endif %}>
           <option value="TCP" {% if client.protocol == 'TCP' %}selected{% endif %}>TCP</option>
           <option value="UDP" {% if client.protocol == 'UDP' %}selected{% endif %}>UDP</option>
         </select>
       </label>
-      <label>目标 IP<input name="target_ip" value="{{ client.target_ip }}" required></label>
-      <label>目标端口<input name="target_port" type="number" value="{{ client.target_port }}" required></label>
-      <label class="checkbox"><input name="hex_mode" type="checkbox" {% if client.hex_mode %}checked{% endif %}> Hex 模式</label>
-      <button type="submit">保存配置</button>
+      <label>目标 IP<input name="target_ip" value="{{ client.target_ip }}" required {% if client.running %}disabled{% endif %}></label>
+      <label>目标端口<input name="target_port" type="number" value="{{ client.target_port }}" required {% if client.running %}disabled{% endif %}></label>
+      <label class="checkbox"><input name="hex_mode" type="checkbox" {% if client.hex_mode %}checked{% endif %} {% if client.running %}disabled{% endif %}> Hex 模式</label>
+      <button type="submit" {% if client.running %}disabled{% endif %}>保存配置</button>
     </form>
     {% else %}
     <p>协议：{{ client.protocol }}</p>

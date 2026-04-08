@@ -331,6 +331,12 @@ def update_client_config(
     user: User = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
+    if runtime_manager.client_runtime.running:
+        context = _base_context(request, user)
+        context["client"] = runtime_manager.client_snapshot()
+        context["message"] = "Client 正在运行，请先断开再修改配置"
+        return templates.TemplateResponse(request, "client.html", context)
+
     runtime_manager.apply_client_config(
         {
             "protocol": protocol,
