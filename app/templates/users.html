@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}用户管理{% endblock %}
+{% block content %}
+<section class="page-header">
+  <h1>用户管理</h1>
+  {% if message %}<div class="alert success">{{ message }}</div>{% endif %}
+  {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+</section>
+
+<section class="grid two">
+  <article class="card">
+    <h2>创建用户</h2>
+    <form method="post" action="/users/create">
+      <label>用户名<input name="username" required></label>
+      <label>密码<input name="password" type="password" required></label>
+      <label>
+        角色
+        <select name="role">
+          <option value="viewer">viewer</option>
+          <option value="operator">operator</option>
+          <option value="admin">admin</option>
+        </select>
+      </label>
+      <button type="submit">创建用户</button>
+    </form>
+  </article>
+  <article class="card">
+    <h2>访问规则</h2>
+    <p>仅 admin 可访问该页面。</p>
+    <p>本轮支持列表、创建、启用和禁用用户。</p>
+  </article>
+</section>
+
+<section class="card">
+  <h2>用户列表</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>用户名</th>
+          <th>角色</th>
+          <th>状态</th>
+          <th>创建时间</th>
+          <th>最后登录</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in users %}
+        <tr>
+          <td>{{ item.username }}</td>
+          <td>{{ item.role }}</td>
+          <td>{{ '启用' if item.is_active else '禁用' }}</td>
+          <td>{{ item.created_at }}</td>
+          <td>{{ item.last_login_at or '从未登录' }}</td>
+          <td>
+            <form method="post" action="/users/toggle">
+              <input type="hidden" name="user_id" value="{{ item.id }}">
+              <button type="submit" class="{{ 'danger' if item.is_active else '' }}">
+                {{ '禁用' if item.is_active else '启用' }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

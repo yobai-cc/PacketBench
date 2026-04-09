@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user, require_role
+from app.auth.security import hash_password
 from app.db import get_db
 from app.models.packet_log import PacketLog
 from app.models.service_config import ServiceConfig
@@ -21,6 +22,12 @@ templates = Jinja2Templates(directory="app/templates")
 
 def _base_context(request: Request, user: User) -> dict[str, object]:
     return {"request": request, "current_user": user}
+
+
+def _users_context(request: Request, user: User, db: Session) -> dict[str, object]:
+    context = _base_context(request, user)
+    context["users"] = db.query(User).order_by(User.id.asc()).all()
+    return context
 
 
 def _save_udp_config(db: Session, snapshot: dict[str, object]) -> None:
@@ -404,5 +411,84 @@ async def send_client_manual(
 
 
 @router.get("/users", response_class=HTMLResponse)
-def users_placeholder(request: Request, user: User = Depends(require_role("admin"))):
-    return templates.TemplateResponse(request, "placeholder.html", {**_base_context(request, user), "title": "用户管理", "message": "第二阶段实现"})
+def users_page(
+    request: Request,
+    user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    context = _users_context(request, user, db)
+    return templates.TemplateResponse(request, "users.html", context)
+
+
+@router.post("/users/create", response_class=HTMLResponse)
+def create_user(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    role: str = Form(...),
+    user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    username = username.strip()
+    allowed_roles = {"admin", "operator", "viewer"}
+
+    context = _users_context(request, user, db)
+    if not username or not password:
+        context["error"] = "用户名和密码不能为空"
+        return templates.TemplateResponse(request, "users.html", context)
+    if role not in allowed_roles:
+        context["error"] = "角色不合法"
+        return templates.TemplateResponse(request, "users.html", context)
+    if db.query(User).filter(User.username == username).first() is not None:
+        context["error"] = "用户名已存在"
+        return templates.TemplateResponse(request, "users.html", context)
+
+    row = User(username=username, password_hash=hash_password(password), role=role, is_active=True)
+    db.add(row)
+    db.commit()
+    system_log_service.log_to_db("info", "auth", f"User {username} created by {user.username}", db=db)
+
+    context = _users_context(request, user, db)
+    context["message"] = "用户已创建"
+    return templates.TemplateResponse(request, "users.html", context)
+
+
+@router.post("/users/toggle", response_class=HTMLResponse)
+def toggle_user(
+    request: Request,
+    user_id: int = Form(...),
+    user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    context = _users_context(request, user, db)
+    target = db.get(User, user_id)
+    if target is None:
+        context["error"] = "用户不存在"
+        return templates.TemplateResponse(request, "users.html", context)
+
+    if target.is_active:
+        if target.id == user.id:
+            context["error"] = "不能禁用当前登录账号"
+            return templates.TemplateResponse(request, "users.html", context)
+
+        if target.role == "admin":
+            active_admin_count = db.query(User).filter(User.role == "admin", User.is_active.is_(True)).count()
+            if active_admin_count <= 1:
+                context["error"] = "至少保留一个启用中的 admin"
+                return templates.TemplateResponse(request, "users.html", context)
+
+        target.is_active = False
+        message = "用户已禁用"
+        log_message = f"User {target.username} disabled by {user.username}"
+    else:
+        target.is_active = True
+        message = "用户已启用"
+        log_message = f"User {target.username} enabled by {user.username}"
+
+    db.add(target)
+    db.commit()
+    system_log_service.log_to_db("info", "auth", log_message, db=db)
+
+    context = _users_context(request, user, db)
+    context["message"] = message
+    return templates.TemplateResponse(request, "users.html", context)
