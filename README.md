@@ -80,6 +80,8 @@ python -m venv .venv
 
 - 交付测试流程可参考 `docs/2026-04-09-delivery-test-guide.md`
 - 当前开发进度快照可参考 `docs/2026-04-09-development-status.md`
+- 仓库维护规则可参考 `docs/ai-maintenance-guide.md`
+- Ubuntu 分支使用说明可参考 `docs/2026-04-09-ubuntu-deployment-adaptation.md`
 - Ubuntu 部署适配清单可参考 `docs/2026-04-09-ubuntu-deployment-adaptation.md`
 
 ## UDP Server MVP 说明

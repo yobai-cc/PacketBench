@@ -18,6 +18,20 @@ def test_deployment_files_use_packetbench_name() -> None:
     assert "u2t_web" not in readme
 
 
+def test_maintenance_and_ubuntu_guides_are_linked() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    docs_index = (ROOT / "docs" / "INDEX.md").read_text(encoding="utf-8")
+    maintenance_guide = (ROOT / "docs" / "ai-maintenance-guide.md").read_text(encoding="utf-8")
+    ubuntu_guide = (ROOT / "docs" / "2026-04-09-ubuntu-deployment-adaptation.md").read_text(encoding="utf-8")
+
+    assert "docs/ai-maintenance-guide.md" in readme
+    assert "docs/2026-04-09-ubuntu-deployment-adaptation.md" in readme
+    assert "ai-maintenance-guide.md" in docs_index
+    assert "2026-04-09-ubuntu-deployment-adaptation.md" in docs_index
+    assert "release/ubuntu-v0.1.0" in maintenance_guide
+    assert "## 0. 本分支如何使用" in ubuntu_guide
+
+
 def test_ubuntu_adaptation_doc_covers_public_ip_ports_and_caddy() -> None:
     adaptation_doc = (ROOT / "docs" / "2026-04-09-ubuntu-deployment-adaptation.md").read_text(encoding="utf-8")
     caddy_example = (ROOT / "Caddyfile.example").read_text(encoding="utf-8")
