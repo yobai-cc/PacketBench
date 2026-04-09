@@ -31,6 +31,20 @@ def _users_context(request: Request, user: User, db: Session) -> dict[str, objec
     return context
 
 
+def _runtime_error(
+    request: Request,
+    user: User,
+    template_name: str,
+    context_key: str,
+    snapshot: dict[str, object],
+    error_message: str,
+):
+    context = _base_context(request, user)
+    context[context_key] = snapshot
+    context["error"] = error_message
+    return templates.TemplateResponse(request, template_name, context)
+
+
 def _save_udp_config(db: Session, snapshot: dict[str, object]) -> None:
     row = db.query(ServiceConfig).filter(ServiceConfig.name == "udp_relay").first()
     payload = {
@@ -157,7 +171,19 @@ async def start_udp_server(
     user: User = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
-    await runtime_manager.udp_relay.start()
+    try:
+        await runtime_manager.udp_relay.start()
+    except Exception as exc:
+        system_log_service.log_to_db("error", "service", f"UDP relay start failed by {user.username}", str(exc), db=db)
+        return _runtime_error(
+            request,
+            user,
+            "udp_server.html",
+            "udp",
+            runtime_manager.udp_snapshot(),
+            f"UDP 服务启动失败：{exc}",
+        )
+
     snapshot = runtime_manager.udp_snapshot()
     _save_udp_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"UDP relay started by {user.username}", db=db)
@@ -173,7 +199,19 @@ async def stop_udp_server(
     user: User = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
-    await runtime_manager.udp_relay.stop()
+    try:
+        await runtime_manager.udp_relay.stop()
+    except Exception as exc:
+        system_log_service.log_to_db("error", "service", f"UDP relay stop failed by {user.username}", str(exc), db=db)
+        return _runtime_error(
+            request,
+            user,
+            "udp_server.html",
+            "udp",
+            runtime_manager.udp_snapshot(),
+            f"UDP 服务停止失败：{exc}",
+        )
+
     snapshot = runtime_manager.udp_snapshot()
     _save_udp_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"UDP relay stopped by {user.username}", db=db)
@@ -190,7 +228,21 @@ async def send_udp_manual(
     user: User = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
-    await runtime_manager.udp_relay.send_manual(payload)
+    try:
+        await runtime_manager.udp_relay.send_manual(payload)
+    except Exception as exc:
+        system_log_service.log_to_db(
+            "error", "network", f"Manual UDP payload send failed by {user.username}", str(exc), db=db
+        )
+        return _runtime_error(
+            request,
+            user,
+            "udp_server.html",
+            "udp",
+            runtime_manager.udp_snapshot(),
+            f"UDP 手动发送失败：{exc}",
+        )
+
     system_log_service.log_to_db("info", "network", f"Manual UDP payload sent by {user.username}", db=db)
     context = _base_context(request, user)
     context["udp"] = runtime_manager.udp_snapshot()
@@ -316,7 +368,19 @@ async def start_tcp_server(
     user: User = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
-    await runtime_manager.tcp_server.start()
+    try:
+        await runtime_manager.tcp_server.start()
+    except Exception as exc:
+        system_log_service.log_to_db("error", "service", f"TCP server start failed by {user.username}", str(exc), db=db)
+        return _runtime_error(
+            request,
+            user,
+            "tcp_server.html",
+            "tcp",
+            runtime_manager.tcp_snapshot(),
+            f"TCP 服务启动失败：{exc}",
+        )
+
     snapshot = runtime_manager.tcp_snapshot()
     _save_tcp_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"TCP server started by {user.username}", db=db)
@@ -332,7 +396,19 @@ async def stop_tcp_server(
     user: User = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
-    await runtime_manager.tcp_server.stop()
+    try:
+        await runtime_manager.tcp_server.stop()
+    except Exception as exc:
+        system_log_service.log_to_db("error", "service", f"TCP server stop failed by {user.username}", str(exc), db=db)
+        return _runtime_error(
+            request,
+            user,
+            "tcp_server.html",
+            "tcp",
+            runtime_manager.tcp_snapshot(),
+            f"TCP 服务停止失败：{exc}",
+        )
+
     snapshot = runtime_manager.tcp_snapshot()
     _save_tcp_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"TCP server stopped by {user.username}", db=db)
@@ -350,7 +426,25 @@ async def send_tcp_manual(
     user: User = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
-    await runtime_manager.tcp_server.send_manual(client_id, payload)
+    try:
+        await runtime_manager.tcp_server.send_manual(client_id, payload)
+    except Exception as exc:
+        system_log_service.log_to_db(
+            "error",
+            "network",
+            f"Manual TCP payload send failed by {user.username} to {client_id}",
+            str(exc),
+            db=db,
+        )
+        return _runtime_error(
+            request,
+            user,
+            "tcp_server.html",
+            "tcp",
+            runtime_manager.tcp_snapshot(),
+            f"TCP 发送失败：{exc}",
+        )
+
     snapshot = runtime_manager.tcp_snapshot()
     _save_tcp_config(db, snapshot)
     system_log_service.log_to_db("info", "network", f"Manual TCP payload sent by {user.username} to {client_id}", db=db)
@@ -367,7 +461,21 @@ async def disconnect_tcp_client(
     user: User = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
-    await runtime_manager.tcp_server.disconnect_client(client_id)
+    try:
+        await runtime_manager.tcp_server.disconnect_client(client_id)
+    except Exception as exc:
+        system_log_service.log_to_db(
+            "error", "service", f"TCP client disconnect failed {client_id} by {user.username}", str(exc), db=db
+        )
+        return _runtime_error(
+            request,
+            user,
+            "tcp_server.html",
+            "tcp",
+            runtime_manager.tcp_snapshot(),
+            f"TCP 客户端断开失败：{exc}",
+        )
+
     snapshot = runtime_manager.tcp_snapshot()
     _save_tcp_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"TCP client disconnected {client_id} by {user.username}", db=db)
@@ -395,10 +503,14 @@ def update_client_config(
     db: Session = Depends(get_db),
 ):
     if runtime_manager.client_runtime.running:
-        context = _base_context(request, user)
-        context["client"] = runtime_manager.client_snapshot()
-        context["message"] = "Client 正在运行，请先断开再修改配置"
-        return templates.TemplateResponse(request, "client.html", context)
+        return _runtime_error(
+            request,
+            user,
+            "client.html",
+            "client",
+            runtime_manager.client_snapshot(),
+            "Client 正在运行，请先断开再修改配置",
+        )
 
     runtime_manager.apply_client_config(
         {
@@ -423,7 +535,19 @@ async def connect_client(
     user: User = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
-    await runtime_manager.client_runtime.connect()
+    try:
+        await runtime_manager.client_runtime.connect()
+    except Exception as exc:
+        system_log_service.log_to_db("error", "service", f"Client connect failed by {user.username}", str(exc), db=db)
+        return _runtime_error(
+            request,
+            user,
+            "client.html",
+            "client",
+            runtime_manager.client_snapshot(),
+            f"Client 连接失败：{exc}",
+        )
+
     snapshot = runtime_manager.client_snapshot()
     _save_client_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"Client connected by {user.username}", db=db)
@@ -439,7 +563,19 @@ async def disconnect_client(
     user: User = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
-    await runtime_manager.client_runtime.disconnect()
+    try:
+        await runtime_manager.client_runtime.disconnect()
+    except Exception as exc:
+        system_log_service.log_to_db("error", "service", f"Client disconnect failed by {user.username}", str(exc), db=db)
+        return _runtime_error(
+            request,
+            user,
+            "client.html",
+            "client",
+            runtime_manager.client_snapshot(),
+            f"Client 断开失败：{exc}",
+        )
+
     snapshot = runtime_manager.client_snapshot()
     _save_client_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"Client disconnected by {user.username}", db=db)
@@ -456,7 +592,21 @@ async def send_client_manual(
     user: User = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
-    await runtime_manager.client_runtime.send_manual(payload)
+    try:
+        await runtime_manager.client_runtime.send_manual(payload)
+    except Exception as exc:
+        system_log_service.log_to_db(
+            "error", "network", f"Manual client payload send failed by {user.username}", str(exc), db=db
+        )
+        return _runtime_error(
+            request,
+            user,
+            "client.html",
+            "client",
+            runtime_manager.client_snapshot(),
+            f"Client 发送失败：{exc}",
+        )
+
     snapshot = runtime_manager.client_snapshot()
     _save_client_config(db, snapshot)
     system_log_service.log_to_db("info", "network", f"Manual client payload sent by {user.username}", db=db)

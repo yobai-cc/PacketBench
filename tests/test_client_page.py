@@ -181,3 +181,116 @@ async def test_client_connect_send_disconnect_routes_update_persisted_snapshot(t
         runtime_manager.client_runtime.update_config(ClientRuntimeConfig())
         server.close()
         await server.wait_closed()
+
+
+@pytest.mark.anyio
+async def test_client_route_failures_render_error_and_write_system_log(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.routers.pages import connect_client, send_client_manual, update_client_config
+
+    db_path = tmp_path / "client-route-failures.db"
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    testing_session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    Base.metadata.create_all(bind=engine)
+
+    user = User(username="operator-user", password_hash="x", role="operator", is_active=True)
+    request = Request({"type": "http", "method": "POST", "path": "/client/connect", "headers": [], "query_string": b""})
+    logs: list[tuple[str, str, str, str]] = []
+
+    monkeypatch.setattr(
+        "app.routers.pages.system_log_service.log_to_db",
+        lambda level, category, message, detail="", db=None: logs.append((level, category, message, detail)),
+    )
+
+    async def boom_connect() -> None:
+        raise RuntimeError("dial failed")
+
+    async def boom_send(payload: str) -> None:
+        raise RuntimeError("write failed")
+
+    monkeypatch.setattr(runtime_manager.client_runtime, "connect", boom_connect)
+    monkeypatch.setattr(runtime_manager.client_runtime, "send_manual", boom_send)
+
+    try:
+        runtime_manager.client_runtime.update_config(
+            ClientRuntimeConfig(protocol="TCP", target_ip="127.0.0.1", target_port=9001, hex_mode=False)
+        )
+
+        with testing_session_local() as db:
+            connect_response = await connect_client(request, user=user, db=db)
+            connect_body = connect_response.body.decode("utf-8")
+            assert "alert error" in connect_body
+            assert "Client 连接失败：dial failed" in connect_body
+
+        assert logs[-1] == ("error", "service", "Client connect failed by operator-user", "dial failed")
+
+        with testing_session_local() as db:
+            send_response = await send_client_manual(request, payload="ping", user=user, db=db)
+            send_body = send_response.body.decode("utf-8")
+            assert "alert error" in send_body
+            assert "Client 发送失败：write failed" in send_body
+
+        assert logs[-1] == ("error", "network", "Manual client payload send failed by operator-user", "write failed")
+
+        runtime_manager.client_runtime.running = True
+        with testing_session_local() as db:
+            blocked_response = update_client_config(
+                request,
+                protocol="TCP",
+                target_ip="10.0.0.1",
+                target_port=80,
+                hex_mode="off",
+                user=user,
+                db=db,
+            )
+            blocked_body = blocked_response.body.decode("utf-8")
+            assert "alert error" in blocked_body
+            assert "Client 正在运行，请先断开再修改配置" in blocked_body
+    finally:
+        runtime_manager.client_runtime.running = False
+        runtime_manager.client_runtime.connected = False
+        runtime_manager.client_runtime.peer_label = "-"
+        runtime_manager.client_runtime.update_config(ClientRuntimeConfig())
+
+
+@pytest.mark.anyio
+async def test_client_disconnect_route_failure_renders_error_and_writes_system_log(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.routers.pages import disconnect_client
+
+    db_path = tmp_path / "client-disconnect-route-failure.db"
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    testing_session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    Base.metadata.create_all(bind=engine)
+
+    user = User(username="operator-user", password_hash="x", role="operator", is_active=True)
+    request = Request({"type": "http", "method": "POST", "path": "/client/disconnect", "headers": [], "query_string": b""})
+    logs: list[tuple[str, str, str, str]] = []
+
+    monkeypatch.setattr(
+        "app.routers.pages.system_log_service.log_to_db",
+        lambda level, category, message, detail="", db=None: logs.append((level, category, message, detail)),
+    )
+
+    async def boom_disconnect() -> None:
+        raise RuntimeError("close failed")
+
+    monkeypatch.setattr(runtime_manager.client_runtime, "disconnect", boom_disconnect)
+
+    try:
+        runtime_manager.client_runtime.running = True
+        runtime_manager.client_runtime.connected = True
+        runtime_manager.client_runtime.peer_label = "127.0.0.1:9001"
+
+        with testing_session_local() as db:
+            disconnect_response = await disconnect_client(request, user=user, db=db)
+            disconnect_body = disconnect_response.body.decode("utf-8")
+            assert "alert error" in disconnect_body
+            assert "Client 断开失败：close failed" in disconnect_body
+
+        assert logs[-1] == ("error", "service", "Client disconnect failed by operator-user", "close failed")
+    finally:
+        runtime_manager.client_runtime.running = False
+        runtime_manager.client_runtime.connected = False
+        runtime_manager.client_runtime.peer_label = "-"
+        runtime_manager.client_runtime.update_config(ClientRuntimeConfig())

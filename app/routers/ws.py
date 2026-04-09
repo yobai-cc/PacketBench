@@ -16,11 +16,15 @@ async def runtime_ws(websocket: WebSocket) -> None:
     await websocket.accept()
     system_log_service.subscribe(websocket)
     try:
+        await websocket.send_json({"type": "snapshot", "udp": runtime_manager.udp_snapshot()})
         while True:
-            await websocket.send_json({"type": "snapshot", "udp": runtime_manager.udp_snapshot()})
-            await asyncio.sleep(2)
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=2)
+            except TimeoutError:
+                await websocket.send_json({"type": "snapshot", "udp": runtime_manager.udp_snapshot()})
     except WebSocketDisconnect:
-        system_log_service.unsubscribe(websocket)
+        pass
     except Exception:
-        system_log_service.unsubscribe(websocket)
         raise
+    finally:
+        system_log_service.unsubscribe(websocket)

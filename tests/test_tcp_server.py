@@ -233,3 +233,115 @@ async def test_tcp_send_and_disconnect_routes_update_persisted_snapshot(tmp_path
         await writer.wait_closed()
         await service.stop()
         runtime_manager.tcp_server.update_config(TCPServerConfig())
+
+
+@pytest.mark.anyio
+async def test_tcp_route_failures_render_error_and_write_system_log(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.routers.pages import disconnect_tcp_client, send_tcp_manual
+
+    db_path = tmp_path / "tcp-route-failures.db"
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    Base.metadata.create_all(bind=engine)
+
+    user = User(username="operator-user", password_hash="x", role="operator", is_active=True)
+    request = Request({"type": "http", "method": "POST", "path": "/tcp-server/send", "headers": [], "query_string": b""})
+    logs: list[tuple[str, str, str, str]] = []
+
+    monkeypatch.setattr(
+        "app.routers.pages.system_log_service.log_to_db",
+        lambda level, category, message, detail="", db=None: logs.append((level, category, message, detail)),
+    )
+
+    async def boom_send(client_id: str, payload: str) -> None:
+        raise RuntimeError("socket broken")
+
+    async def boom_disconnect(client_id: str) -> None:
+        raise RuntimeError("close failed")
+
+    monkeypatch.setattr(runtime_manager.tcp_server, "send_manual", boom_send)
+    monkeypatch.setattr(runtime_manager.tcp_server, "disconnect_client", boom_disconnect)
+
+    try:
+        runtime_manager.tcp_server.update_config(TCPServerConfig(bind_ip="127.0.0.1", bind_port=9100, hex_mode=False))
+
+        with TestingSessionLocal() as db:
+            send_response = await send_tcp_manual(request, client_id="127.0.0.1:9200", payload="pong", user=user, db=db)
+            send_body = send_response.body.decode("utf-8")
+            assert "alert error" in send_body
+            assert "TCP 发送失败：socket broken" in send_body
+
+        assert logs[-1] == (
+            "error",
+            "network",
+            "Manual TCP payload send failed by operator-user to 127.0.0.1:9200",
+            "socket broken",
+        )
+
+        with TestingSessionLocal() as db:
+            disconnect_response = await disconnect_tcp_client(
+                request, client_id="127.0.0.1:9200", user=user, db=db
+            )
+            disconnect_body = disconnect_response.body.decode("utf-8")
+            assert "alert error" in disconnect_body
+            assert "TCP 客户端断开失败：close failed" in disconnect_body
+
+        assert logs[-1] == (
+            "error",
+            "service",
+            "TCP client disconnect failed 127.0.0.1:9200 by operator-user",
+            "close failed",
+        )
+    finally:
+        runtime_manager.tcp_server.update_config(TCPServerConfig())
+
+
+@pytest.mark.anyio
+async def test_tcp_start_stop_route_failures_render_error_and_write_system_log(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.routers.pages import start_tcp_server, stop_tcp_server
+
+    db_path = tmp_path / "tcp-start-stop-route-failures.db"
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    Base.metadata.create_all(bind=engine)
+
+    user = User(username="operator-user", password_hash="x", role="operator", is_active=True)
+    request = Request({"type": "http", "method": "POST", "path": "/tcp-server/start", "headers": [], "query_string": b""})
+    logs: list[tuple[str, str, str, str]] = []
+
+    monkeypatch.setattr(
+        "app.routers.pages.system_log_service.log_to_db",
+        lambda level, category, message, detail="", db=None: logs.append((level, category, message, detail)),
+    )
+
+    async def boom_start() -> None:
+        raise RuntimeError("bind failed")
+
+    async def boom_stop() -> None:
+        raise RuntimeError("close failed")
+
+    monkeypatch.setattr(runtime_manager.tcp_server, "start", boom_start)
+    monkeypatch.setattr(runtime_manager.tcp_server, "stop", boom_stop)
+
+    try:
+        runtime_manager.tcp_server.update_config(TCPServerConfig(bind_ip="127.0.0.1", bind_port=9100, hex_mode=False))
+
+        with TestingSessionLocal() as db:
+            start_response = await start_tcp_server(request, user=user, db=db)
+            start_body = start_response.body.decode("utf-8")
+            assert "alert error" in start_body
+            assert "TCP 服务启动失败：bind failed" in start_body
+
+        assert logs[-1] == ("error", "service", "TCP server start failed by operator-user", "bind failed")
+
+        with TestingSessionLocal() as db:
+            stop_response = await stop_tcp_server(request, user=user, db=db)
+            stop_body = stop_response.body.decode("utf-8")
+            assert "alert error" in stop_body
+            assert "TCP 服务停止失败：close failed" in stop_body
+
+        assert logs[-1] == ("error", "service", "TCP server stop failed by operator-user", "close failed")
+    finally:
+        runtime_manager.tcp_server.update_config(TCPServerConfig())

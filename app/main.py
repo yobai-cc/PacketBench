@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -12,12 +13,19 @@ from app.routers import auth, pages, ws
 from app.services.logging_service import system_log_service
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    system_log_service.logger.info("Application startup complete")
+    yield
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.log_dir.mkdir(parents=True, exist_ok=True)
 
-    app = FastAPI(title="U2T Web Platform")
+    app = FastAPI(title="U2T Web Platform", lifespan=lifespan)
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.secret_key,
@@ -32,11 +40,6 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(pages.router)
     app.include_router(ws.router)
-
-    @app.on_event("startup")
-    async def on_startup() -> None:
-        init_db()
-        system_log_service.logger.info("Application startup complete")
 
     return app
 

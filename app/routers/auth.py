@@ -19,7 +19,7 @@ templates = Jinja2Templates(directory="app/templates")
 
 @router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+    return templates.TemplateResponse(request, "login.html", {"error": None})
 
 
 @router.post("/login", response_class=HTMLResponse)
@@ -33,8 +33,9 @@ def login(
     if not user or not verify_password(password, user.password_hash) or not user.is_active:
         system_log_service.log_to_db("warning", "auth", f"Login failed for {username}", db=db)
         return templates.TemplateResponse(
+            request,
             "login.html",
-            {"request": request, "error": "用户名或密码错误"},
+            {"error": "用户名或密码错误"},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 

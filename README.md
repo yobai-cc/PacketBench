@@ -73,6 +73,8 @@ python -m venv .venv
 
 默认登录账号来自 `.env` 或 `.env.example` 中的 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`。
 
+- 交付测试流程可参考 `docs/2026-04-09-delivery-test-guide.md`
+
 ## TCP Server MVP 说明
 
 - 页面入口：`/tcp-server`
