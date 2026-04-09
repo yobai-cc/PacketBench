@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Form, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user, require_role
@@ -201,6 +202,9 @@ async def send_udp_manual(
 def packets(
     request: Request,
     protocol: str | None = None,
+    service: str | None = None,
+    direction: str | None = None,
+    q: str | None = None,
     limit: int = 100,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -208,17 +212,69 @@ def packets(
     query = db.query(PacketLog)
     if protocol:
         query = query.filter(PacketLog.protocol == protocol)
+    if service:
+        query = query.filter(PacketLog.service_type == service)
+    if direction:
+        query = query.filter(PacketLog.direction == direction)
+    if q:
+        search = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                PacketLog.data_text.ilike(search),
+                PacketLog.data_hex.ilike(search),
+                PacketLog.src_ip.ilike(search),
+                PacketLog.dst_ip.ilike(search),
+            )
+        )
     rows = query.order_by(PacketLog.created_at.desc()).limit(limit).all()
     context = _base_context(request, user)
-    context.update({"packets": rows, "selected_protocol": protocol or "", "limit": limit})
+    context.update(
+        {
+            "packets": rows,
+            "selected_protocol": protocol or "",
+            "selected_service": service or "",
+            "selected_direction": direction or "",
+            "query_text": q or "",
+            "limit": limit,
+        }
+    )
     return templates.TemplateResponse(request, "packets.html", context)
 
 
 @router.get("/logs", response_class=HTMLResponse)
-def logs(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    rows = db.query(SystemLog).order_by(SystemLog.created_at.desc()).limit(200).all()
+def logs(
+    request: Request,
+    level: str | None = None,
+    category: str | None = None,
+    q: str | None = None,
+    limit: int = 200,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    query = db.query(SystemLog)
+    if level:
+        query = query.filter(SystemLog.level == level)
+    if category:
+        query = query.filter(SystemLog.category == category)
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                SystemLog.message.ilike(like),
+                SystemLog.detail.ilike(like),
+            )
+        )
+    rows = query.order_by(SystemLog.created_at.desc()).limit(limit).all()
     context = _base_context(request, user)
-    context["logs"] = rows
+    context.update(
+        {
+            "logs": rows,
+            "selected_level": level or "",
+            "selected_category": category or "",
+            "query_text": q or "",
+            "limit": limit,
+        }
+    )
     return templates.TemplateResponse(request, "logs.html", context)
 
 

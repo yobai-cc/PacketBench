@@ -5,6 +5,28 @@
   <h1>系统日志</h1>
 </section>
 <section class="card">
+  <form method="get" action="/logs" class="filter-row">
+    <label>级别
+      <select name="level">
+        <option value="" {% if not selected_level %}selected{% endif %}>全部</option>
+        <option value="info" {% if selected_level == 'info' %}selected{% endif %}>info</option>
+        <option value="warning" {% if selected_level == 'warning' %}selected{% endif %}>warning</option>
+        <option value="error" {% if selected_level == 'error' %}selected{% endif %}>error</option>
+      </select>
+    </label>
+    <label>分类
+      <select name="category">
+        <option value="" {% if not selected_category %}selected{% endif %}>全部</option>
+        <option value="auth" {% if selected_category == 'auth' %}selected{% endif %}>auth</option>
+        <option value="service" {% if selected_category == 'service' %}selected{% endif %}>service</option>
+        <option value="config" {% if selected_category == 'config' %}selected{% endif %}>config</option>
+        <option value="network" {% if selected_category == 'network' %}selected{% endif %}>network</option>
+      </select>
+    </label>
+    <label>关键字<input name="q" value="{{ query_text }}"></label>
+    <label>最近 N 条<input type="number" name="limit" value="{{ limit }}"></label>
+    <button type="submit">筛选</button>
+  </form>
   <div class="table-wrap">
     <table>
       <thead>

@@ -13,18 +13,39 @@
         <option value="TCP" {% if selected_protocol == 'TCP' %}selected{% endif %}>TCP</option>
       </select>
     </label>
+    <label>服务
+      <select name="service">
+        <option value="" {% if not selected_service %}selected{% endif %}>全部</option>
+        <option value="udp_server" {% if selected_service == 'udp_server' %}selected{% endif %}>udp_server</option>
+        <option value="tcp_server" {% if selected_service == 'tcp_server' %}selected{% endif %}>tcp_server</option>
+        <option value="client" {% if selected_service == 'client' %}selected{% endif %}>client</option>
+      </select>
+    </label>
+    <label>方向
+      <select name="direction">
+        <option value="" {% if not selected_direction %}selected{% endif %}>全部</option>
+        <option value="client -> server" {% if selected_direction == 'client -> server' %}selected{% endif %}>client -> server</option>
+        <option value="cloud -> server" {% if selected_direction == 'cloud -> server' %}selected{% endif %}>cloud -> server</option>
+        <option value="client -> remote" {% if selected_direction == 'client -> remote' %}selected{% endif %}>client -> remote</option>
+        <option value="remote -> client" {% if selected_direction == 'remote -> client' %}selected{% endif %}>remote -> client</option>
+        <option value="server -> client" {% if selected_direction == 'server -> client' %}selected{% endif %}>server -> client</option>
+        <option value="remote -> server" {% if selected_direction == 'remote -> server' %}selected{% endif %}>remote -> server</option>
+      </select>
+    </label>
+    <label>关键字<input type="text" name="q" value="{{ query_text }}"></label>
     <label>最近 N 条<input type="number" name="limit" value="{{ limit }}"></label>
     <button type="submit">筛选</button>
   </form>
   <div class="table-wrap">
     <table>
       <thead>
-        <tr><th>时间</th><th>协议</th><th>方向</th><th>源</th><th>目标</th><th>长度</th><th>HEX</th><th>文本</th></tr>
+        <tr><th>时间</th><th>服务</th><th>协议</th><th>方向</th><th>源</th><th>目标</th><th>长度</th><th>HEX</th><th>文本</th></tr>
       </thead>
       <tbody>
         {% for row in packets %}
         <tr>
           <td>{{ row.created_at }}</td>
+          <td>{{ row.service_type }}</td>
           <td>{{ row.protocol }}</td>
           <td>{{ row.direction }}</td>
           <td>{{ row.src_ip }}:{{ row.src_port }}</td>
