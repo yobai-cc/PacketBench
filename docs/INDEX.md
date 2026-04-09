@@ -11,7 +11,7 @@
 - `ai-maintenance-guide.md`
   - 个人维护手册与 AI 智能体工作约束，适合日常维护前优先阅读。
 - `2026-04-09-ubuntu-deployment-adaptation.md`
-  - Ubuntu 交付分支使用说明、固定端口策略与 Caddy 配置示例。
+  - Ubuntu 部署与交付准备手册，覆盖代码获取、部署动作、验收与回滚。
 
 ## Historical Snapshots
 

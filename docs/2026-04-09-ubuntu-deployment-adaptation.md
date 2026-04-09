@@ -42,22 +42,73 @@ curl -4 https://api.ipify.org
 
 预期结果：命令返回一个公网 IP 字符串，例如 `203.0.113.10`。
 
-## 2. 服务器目录与项目文件准备
+## 2. 服务器目录与项目代码准备
 
-先创建部署目录，并把项目文件放到 `/opt/packetbench`：
+先创建部署目录：
 
 ```bash
 sudo mkdir -p /opt/packetbench
 sudo chown -R $USER:$USER /opt/packetbench
-```
-
-进入部署目录：
-
-```bash
 cd /opt/packetbench
 ```
 
-然后将项目文件上传或拉取到当前目录，至少应包含这些文件和目录：
+推荐优先使用 Git 方式准备代码，便于后续更新、问题追踪和回滚。
+
+### 方案 A：使用 Git 拉取项目代码（推荐）
+
+首次部署可直接执行：
+
+```bash
+git clone https://github.com/yobai-cc/PacketBench.git .
+git checkout release/ubuntu-v0.1.0
+git pull origin release/ubuntu-v0.1.0
+git branch --show-current
+git rev-parse --short HEAD
+```
+
+说明：
+
+- 首次部署使用 `git clone`
+- 交付分支固定使用 `release/ubuntu-v0.1.0`
+- `git rev-parse --short HEAD` 用于记录当前实际部署提交
+
+如果服务器已经部署过一次，后续更新可执行：
+
+```bash
+cd /opt/packetbench
+git fetch origin
+git checkout release/ubuntu-v0.1.0
+git pull origin release/ubuntu-v0.1.0
+git rev-parse --short HEAD
+```
+
+预期结果：
+
+- 当前分支显示为 `release/ubuntu-v0.1.0`
+- 能输出当前短提交号
+- 项目目录下能看到代码文件和 `docs/`、`scripts/`、`systemd/` 等目录
+
+### 方案 B：使用压缩包上传项目代码（无 Git 环境时使用）
+
+如果服务器无法直接访问 GitHub，可先在本地准备好交付压缩包，然后上传到服务器，例如上传到 `/opt/packetbench`：
+
+```bash
+cd /opt/packetbench
+unzip packetbench-release-ubuntu-v0.1.0.zip -d /opt/packetbench
+ls
+```
+
+如果当前目录中已有旧版本文件，建议先备份旧目录，再解压新包，避免新旧文件混杂。例如：
+
+```bash
+cd /opt
+mv packetbench packetbench.bak
+mkdir -p packetbench
+cd packetbench
+unzip ../packetbench-release-ubuntu-v0.1.0.zip -d /opt/packetbench
+```
+
+预期结果：解压后至少应能看到以下文件和目录：
 
 - `requirements.txt`
 - `.env.example`
@@ -68,7 +119,13 @@ cd /opt/packetbench
 - `systemd/app.service`
 - `Caddyfile.example`
 
-预期结果：在 `/opt/packetbench` 下执行 `ls`，可以看到上述文件。
+### 代码版本确认
+
+代码准备完成后，建议至少记录以下信息：
+
+- 当前分支：`git branch --show-current`（若为压缩包方式，可记为压缩包版本名）
+- 当前提交：`git rev-parse --short HEAD`（若为压缩包方式，可记为压缩包文件名）
+- 关键文件是否存在：`requirements.txt`、`.env.example`、`scripts/run.py`、`systemd/app.service`
 
 ## 3. 安装系统依赖
 
@@ -90,7 +147,23 @@ caddy version
 
 预期结果：`python3` 和 `caddy` 都能输出版本号。
 
-## 4. 初始化 Python 环境与依赖
+## 4. 部署动作顺序
+
+建议现场按下面顺序执行，不要跳步：
+
+1. 准备服务器目录
+2. 获取项目代码（Git 或压缩包）
+3. 确认代码版本和关键文件
+4. 安装系统依赖
+5. 创建虚拟环境并安装依赖
+6. 配置 `.env`
+7. 初始化数据库并执行预检查
+8. 安装或重启 `systemd` 服务
+9. 写入并校验 Caddy 配置
+10. 放行端口
+11. 验收
+
+## 5. 初始化 Python 环境与依赖
 
 如果希望一步完成虚拟环境、依赖安装、`.env` 初始化、数据库初始化和预检查，可直接执行：
 
@@ -101,10 +174,19 @@ sudo bash scripts/bootstrap_ubuntu.sh
 如果你希望逐步执行和观察每一步，也可以手动运行：
 
 ```bash
+cd /opt/packetbench
 mkdir -p data logs
 python3 -m venv .venv
 . .venv/bin/activate
 pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+如果是 Git 方式的后续版本更新，也建议在 `git pull` 之后重复执行：
+
+```bash
+cd /opt/packetbench
+. .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -114,7 +196,7 @@ pip install -r requirements.txt
 - `pip install -r requirements.txt` 成功完成
 - 没有出现缺失系统依赖导致的安装失败
 
-## 5. 配置 `.env`
+## 6. 配置 `.env`
 
 如果项目目录下还没有 `.env`，先从示例文件复制：
 
@@ -149,11 +231,12 @@ SESSION_SECURE=false
 
 预期结果：`.env` 文件已存在，且关键配置项已经根据现场环境修改完成。
 
-## 6. 初始化数据库与预检查
+## 7. 初始化数据库与预检查
 
 如果前面没有使用 `bootstrap_ubuntu.sh`，请手动执行：
 
 ```bash
+cd /opt/packetbench
 .venv/bin/python scripts/init_db.py
 .venv/bin/python scripts/preflight.py
 ```
@@ -163,12 +246,19 @@ SESSION_SECURE=false
 - 数据库初始化成功
 - `scripts/preflight.py` 输出成功并退出码为 0
 
+如果是 Git 更新或压缩包替换后的再次部署，也建议至少执行：
+
+```bash
+cd /opt/packetbench
+.venv/bin/python scripts/preflight.py
+```
+
 如果初始化完成，可额外确认这些目录文件已经出现：
 
 - `data/app.db`
 - `logs/`
 
-## 7. 安装并启动 systemd 服务
+## 8. 安装并启动 systemd 服务
 
 仓库内置的服务文件位于 `systemd/app.service`，其关键配置为：
 
@@ -183,12 +273,20 @@ SESSION_SECURE=false
 sudo chown -R www-data:www-data /opt/packetbench
 ```
 
-然后安装并启动服务：
+首次部署安装服务：
 
 ```bash
 sudo cp systemd/app.service /etc/systemd/system/packetbench.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now packetbench.service
+sudo systemctl status packetbench.service
+```
+
+如果是后续更新部署，可执行：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart packetbench.service
 sudo systemctl status packetbench.service
 ```
 
@@ -200,7 +298,7 @@ sudo systemctl status packetbench.service
 journalctl -u packetbench.service -n 100 --no-pager
 ```
 
-## 8. 配置 Caddy 反向代理
+## 9. 配置 Caddy 反向代理
 
 Web 应用建议固定为本机监听 `127.0.0.1:8080`，由 Caddy 对外暴露 80/443。
 
@@ -244,7 +342,7 @@ sudo systemctl status caddy
 - `systemctl status caddy` 显示 `active (running)`
 - 浏览器可以访问 `http://<公网IP>/login` 或 `https://<域名>/login`
 
-## 9. 放行防火墙与云安全组端口
+## 10. 放行防火墙与云安全组端口
 
 推荐固定本次部署端口如下：
 
@@ -275,7 +373,7 @@ sudo ufw status
 
 说明：`127.0.0.1:8080` 只给本机 Caddy 使用，不需要对公网放开。
 
-## 10. 首次部署验收
+## 11. 首次部署验收
 
 完成部署后，按下面顺序验收：
 
@@ -289,7 +387,7 @@ sudo ufw status
 
 重点提醒：页面中的 UDP/TCP 绑定端口、防火墙、云安全组、联调说明必须一致。只要其中一处不一致，就容易出现“页面显示已启动，但外部仍然打不通”的问题。
 
-## 11. 常见故障排查
+## 12. 常见故障排查
 
 如果服务无法访问、页面打不开或外部端口不通，按下面顺序排查：
 
@@ -311,7 +409,7 @@ sudo ufw status
 - 检查 `/opt/packetbench` 目录权限
   作用：如果 `packetbench.service` 运行用户是 `www-data`，但目录或 `data`、`logs` 不可写，应用可能启动失败或运行异常。
 
-## 12. 一条现场原则
+## 13. 一条现场原则
 
 生产现场不要先改页面端口再去猜防火墙，也不要先放行防火墙再忘记页面绑定。
 
@@ -323,7 +421,7 @@ sudo ufw status
 
 页面配置、`ufw`、云安全组、交付清单四处必须一致。
 
-## 13. 交付包清单
+## 14. 交付包清单
 
 交付前至少确认以下内容已准备完毕：
 
@@ -338,7 +436,7 @@ sudo ufw status
 
 建议把以上信息单独截图或整理成一页交付附件，避免现场口头交接后遗漏。
 
-## 14. 部署前信息登记
+## 15. 部署前信息登记
 
 建议在交付前补齐以下信息，并按现场实际填写：
 
@@ -355,7 +453,7 @@ sudo ufw status
 - 本次部署代码来源：
 - 上一版可回滚版本：
 
-## 15. 现场操作顺序
+## 16. 现场操作顺序
 
 建议现场按以下顺序操作：
 
@@ -369,7 +467,7 @@ sudo ufw status
 8. 记录验收结果和交接信息
 9. 向接手人明确回滚入口和关键检查命令
 
-## 16. 回滚说明
+## 17. 回滚说明
 
 如果本次部署失败或验收不通过，建议按以下顺序回滚：
 
@@ -393,7 +491,7 @@ sudo systemctl status caddy
 
 说明：当前仓库没有单独的数据库迁移回滚机制，因此不要在现场假设存在额外的自动回滚脚本。回滚应以恢复上一版代码、`.env` 和 Caddy 配置为主。
 
-## 17. 验收记录模板
+## 18. 验收记录模板
 
 建议现场直接按下面模板记录：
 
@@ -407,7 +505,7 @@ sudo systemctl status caddy
 - 服务状态检查结果：通过 / 失败
 - 备注：
 
-## 18. 最终交付检查表
+## 19. 最终交付检查表
 
 - [ ] 文档已更新为现场实际信息
 - [ ] `.env` 已按现场配置完成
