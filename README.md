@@ -122,6 +122,8 @@ python -m venv .venv
 
 以下步骤以 Ubuntu 22.04/24.04 为目标环境。
 
+- Ubuntu 部署与交付准备文档：`docs/2026-04-09-ubuntu-deployment-adaptation.md`
+
 1. 安装系统依赖
 
 ```bash
