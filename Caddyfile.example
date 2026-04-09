@@ -1,4 +1,4 @@
-example.com {
+packetbench.example.com {
     encode gzip zstd
     header {
         X-Content-Type-Options nosniff

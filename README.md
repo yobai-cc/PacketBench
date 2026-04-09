@@ -80,6 +80,7 @@ python -m venv .venv
 
 - 交付测试流程可参考 `docs/2026-04-09-delivery-test-guide.md`
 - 当前开发进度快照可参考 `docs/2026-04-09-development-status.md`
+- Ubuntu 部署适配清单可参考 `docs/2026-04-09-ubuntu-deployment-adaptation.md`
 
 ## UDP Server MVP 说明
 
@@ -189,6 +190,8 @@ sudo systemctl reload caddy
 
 - 80/443 由 Caddy 使用
 - TCP/UDP 业务端口由本应用直接监听，需要在 Ubuntu 防火墙和云安全组中放行
+- 推荐固定端口表：Web `127.0.0.1:8080`、UDP `9000/udp`、TCP `9100/tcp`
+- 若页面中调整了 UDP/TCP 监听端口，必须同步修改 `ufw` 和云安全组
 
 可直接使用：
 
