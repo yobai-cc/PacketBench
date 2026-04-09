@@ -10,7 +10,7 @@
     <h2>UDP 服务状态</h2>
     <p>运行中：{{ '是' if udp.running else '否' }}</p>
     <p>监听：{{ udp.bind_ip }}:{{ udp.bind_port }}</p>
-    <p>云端：{{ udp.cloud_ip }}:{{ udp.cloud_port }}</p>
+    <p>回复模式：固定自定义数据</p>
     <p>TX：{{ udp.tx_count }} bytes</p>
     <p>RX：{{ udp.rx_count }} bytes</p>
   </article>

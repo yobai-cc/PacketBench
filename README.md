@@ -8,7 +8,7 @@
 
 - 用户名密码登录与 Session 会话
 - Dashboard
-- UDP Relay 服务骨架与固定规则
+- UDP 自动回复服务骨架与固定规则
 - 协议包日志页
 - 系统日志页
 - Caddy 与 systemd 示例配置
@@ -78,6 +78,18 @@ python -m venv .venv
 
 - 交付测试流程可参考 `docs/2026-04-09-delivery-test-guide.md`
 - 当前开发进度快照可参考 `docs/2026-04-09-development-status.md`
+
+## UDP Server MVP 说明
+
+- 页面入口：`/udp-server`
+- 默认监听配置：`0.0.0.0:9000`
+- 支持保存 `bind_ip`、`bind_port`、`custom_reply_data`、`hex_mode`
+- 终端设备发包到服务后，服务立即回发固定自定义数据
+- `custom_reply_data` 为空时，服务不回包并写入 warning 日志
+- `admin` 和 `operator` 可执行启动、停止、手动发送操作
+- `viewer` 仅可查看状态和计数
+- UDP 流量会写入 `packet_logs`，可在 `/packets?protocol=UDP` 查看
+- UDP 运行事件会写入 `system_logs`，可在 `/logs` 查看
 
 ## TCP Server MVP 说明
 

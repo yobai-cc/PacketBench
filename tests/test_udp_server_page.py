@@ -45,8 +45,6 @@ async def test_udp_route_failures_render_error_and_write_system_log(tmp_path, mo
             UDPRelayConfig(
                 bind_ip="127.0.0.1",
                 bind_port=9000,
-                cloud_ip="127.0.0.1",
-                cloud_port=9001,
                 custom_reply_data="",
                 hex_mode=False,
             )
@@ -86,3 +84,57 @@ async def test_udp_route_failures_render_error_and_write_system_log(tmp_path, mo
         runtime_manager.udp_relay.protocol = None
         runtime_manager.udp_relay.last_client_addr = None
         runtime_manager.udp_relay.update_config(UDPRelayConfig())
+
+
+def test_update_udp_config_accepts_bind_and_reply_fields_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.routers.pages import update_udp_config
+
+    user = User(username="operator-user", password_hash="x", role="operator", is_active=True)
+    request = Request({"type": "http", "method": "POST", "path": "/udp-server/config", "headers": [], "query_string": b""})
+
+    captured_payload: list[dict[str, object]] = []
+    snapshots: list[dict[str, object]] = [
+        {
+            "running": False,
+            "bind_ip": "127.0.0.1",
+            "bind_port": 9000,
+            "custom_reply_data": "reply",
+            "hex_mode": True,
+            "tx_count": 0,
+            "rx_count": 0,
+            "last_client_addr": None,
+        }
+    ]
+    logs: list[tuple[str, str, str, str]] = []
+
+    monkeypatch.setattr(runtime_manager, "apply_udp_config", lambda payload: captured_payload.append(payload) or UDPRelayConfig(**payload))
+    monkeypatch.setattr(runtime_manager, "udp_snapshot", lambda: snapshots[-1])
+    monkeypatch.setattr("app.routers.pages._save_udp_config", lambda db, snapshot: None)
+    monkeypatch.setattr(
+        "app.routers.pages.system_log_service.log_to_db",
+        lambda level, category, message, detail="", db=None: logs.append((level, category, message, detail)),
+    )
+
+    response = update_udp_config(
+        request,
+        bind_ip="127.0.0.1",
+        bind_port=9000,
+        custom_reply_data="reply",
+        hex_mode="on",
+        user=user,
+        db=None,
+    )
+
+    body = response.body.decode("utf-8")
+    assert captured_payload == [
+        {
+            "bind_ip": "127.0.0.1",
+            "bind_port": 9000,
+            "custom_reply_data": "reply",
+            "hex_mode": True,
+        }
+    ]
+    assert "自动回复数据" in body
+    assert "云端 IP" not in body
+    assert "UDP 配置已更新" in body
+    assert logs[-1] == ("info", "config", "UDP config updated by operator-user", "")

@@ -16,8 +16,6 @@ from app.utils.codec import parse_payload
 class UDPRelayConfig:
     bind_ip: str = "0.0.0.0"
     bind_port: int = 9000
-    cloud_ip: str = "127.0.0.1"
-    cloud_port: int = 9001
     custom_reply_data: str = ""
     hex_mode: bool = False
 
@@ -41,7 +39,7 @@ class UDPRelayProtocol(asyncio.DatagramProtocol):
 
 
 class UDPRelayService:
-    """Async UDP relay implementing the first-stage client/cloud reply rule."""
+    """Async UDP service that replies fixed configured payloads to devices."""
 
     def __init__(self, db_factory: Callable[[], Session] = SessionLocal) -> None:
         self.db_factory = db_factory
@@ -57,8 +55,7 @@ class UDPRelayService:
         self.config = config
 
     def record_client_addr(self, addr: tuple[str, int]) -> None:
-        if addr != (self.config.cloud_ip, self.config.cloud_port):
-            self.last_client_addr = addr
+        self.last_client_addr = addr
 
     async def start(self) -> None:
         if self.running:
@@ -80,31 +77,23 @@ class UDPRelayService:
 
     async def send_manual(self, payload_text: str, target_addr: tuple[str, int] | None = None) -> None:
         payload = parse_payload(payload_text, self.config.hex_mode)
-        target = target_addr or self.last_client_addr or (self.config.cloud_ip, self.config.cloud_port)
+        target = target_addr or self.last_client_addr
+        if not target:
+            raise RuntimeError("no device address available")
         await self._send_payload(payload, target, "manual")
 
     async def handle_datagram(self, data: bytes, addr: tuple[str, int]) -> None:
         self.rx_count += len(data)
-        if addr == (self.config.cloud_ip, self.config.cloud_port):
-            await self._handle_cloud_packet(data, addr)
-        else:
-            await self._handle_client_packet(data, addr)
-
-    async def _handle_client_packet(self, data: bytes, addr: tuple[str, int]) -> None:
         self.record_client_addr(addr)
-        self.emit_system_log("info", "rule", f"client -> server {addr[0]}:{addr[1]}")
-        self._persist_packet("client -> server", addr, (self.config.bind_ip, self.config.bind_port), data)
-        await self._send_payload(data, (self.config.cloud_ip, self.config.cloud_port), "server -> cloud", source=addr)
+        self.emit_system_log("info", "rule", f"device -> server {addr[0]}:{addr[1]}")
+        self._persist_packet("device -> server", addr, (self.config.bind_ip, self.config.bind_port), data)
 
-    async def _handle_cloud_packet(self, data: bytes, addr: tuple[str, int]) -> None:
-        self.emit_system_log("info", "rule", f"cloud -> server {addr[0]}:{addr[1]}")
-        self._persist_packet("cloud -> server", addr, (self.config.bind_ip, self.config.bind_port), data)
-        if not self.last_client_addr:
-            self.emit_system_log("warning", "rule", "Cloud packet received without last client address")
+        if not self.config.custom_reply_data.strip():
+            self.emit_system_log("warning", "rule", "UDP packet received but custom reply payload is empty")
             return
 
         reply_payload = parse_payload(self.config.custom_reply_data, self.config.hex_mode)
-        await self._send_payload(reply_payload, self.last_client_addr, "server -> client", source=addr)
+        await self._send_payload(reply_payload, addr, "server -> device", source=addr)
 
     async def _send_payload(
         self,

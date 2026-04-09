@@ -12,9 +12,7 @@
     <form method="post" action="/udp-server/config">
       <label>绑定 IP<input name="bind_ip" value="{{ udp.bind_ip }}" required></label>
       <label>绑定端口<input name="bind_port" type="number" value="{{ udp.bind_port }}" required></label>
-      <label>云端 IP<input name="cloud_ip" value="{{ udp.cloud_ip }}" required></label>
-      <label>云端端口<input name="cloud_port" type="number" value="{{ udp.cloud_port }}" required></label>
-      <label>自定义回发数据<textarea name="custom_reply_data">{{ udp.custom_reply_data }}</textarea></label>
+      <label>自动回复数据<textarea name="custom_reply_data">{{ udp.custom_reply_data }}</textarea></label>
       <label class="checkbox"><input name="hex_mode" type="checkbox" {% if udp.hex_mode %}checked{% endif %}> Hex 模式</label>
       <button type="submit">保存配置</button>
     </form>

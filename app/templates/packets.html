@@ -24,6 +24,8 @@
     <label>方向
       <select name="direction">
         <option value="" {% if not selected_direction %}selected{% endif %}>全部</option>
+        <option value="device -> server" {% if selected_direction == 'device -> server' %}selected{% endif %}>device -> server</option>
+        <option value="server -> device" {% if selected_direction == 'server -> device' %}selected{% endif %}>server -> device</option>
         <option value="client -> server" {% if selected_direction == 'client -> server' %}selected{% endif %}>client -> server</option>
         <option value="cloud -> server" {% if selected_direction == 'cloud -> server' %}selected{% endif %}>cloud -> server</option>
         <option value="client -> remote" {% if selected_direction == 'client -> remote' %}selected{% endif %}>client -> remote</option>

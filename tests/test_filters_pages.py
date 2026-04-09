@@ -135,6 +135,25 @@ def test_packets_page_keyword_matches_text_and_ip(tmp_path) -> None:
     assert "pong" not in body
 
 
+def test_packets_page_lists_udp_device_directions() -> None:
+    from app.routers.pages import packets
+
+    request = Request({"type": "http", "method": "GET", "path": "/packets", "headers": [], "query_string": b""})
+    user = User(username="viewer-user", password_hash="x", role="viewer", is_active=True)
+
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    testing_session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    Base.metadata.create_all(bind=engine)
+
+    with testing_session_local() as db:
+        response = packets(request, protocol=None, service=None, direction=None, q=None, limit=50, user=user, db=db)
+
+    body = response.body.decode("utf-8")
+    assert "device -> server" in body
+    assert "server -> device" in body
+    assert "cloud -> server" in body
+
+
 def test_logs_page_filters_by_level_and_category(tmp_path) -> None:
     from app.routers.pages import logs
 

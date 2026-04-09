@@ -19,8 +19,6 @@ class RuntimeManager:
             "running": self.udp_relay.running,
             "bind_ip": config.bind_ip,
             "bind_port": config.bind_port,
-            "cloud_ip": config.cloud_ip,
-            "cloud_port": config.cloud_port,
             "custom_reply_data": config.custom_reply_data,
             "hex_mode": config.hex_mode,
             "tx_count": self.udp_relay.tx_count,
@@ -32,8 +30,6 @@ class RuntimeManager:
         config = UDPRelayConfig(
             bind_ip=str(payload.get("bind_ip") or "0.0.0.0"),
             bind_port=int(payload.get("bind_port") or 9000),
-            cloud_ip=str(payload.get("cloud_ip") or "127.0.0.1"),
-            cloud_port=int(payload.get("cloud_port") or 9001),
             custom_reply_data=str(payload.get("custom_reply_data") or ""),
             hex_mode=bool(payload.get("hex_mode")),
         )

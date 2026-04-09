@@ -60,8 +60,8 @@ def _save_udp_config(db: Session, snapshot: dict[str, object]) -> None:
 
     row.bind_ip = str(snapshot["bind_ip"])
     row.bind_port = int(snapshot["bind_port"])
-    row.target_ip = str(snapshot["cloud_ip"])
-    row.target_port = int(snapshot["cloud_port"])
+    row.target_ip = None
+    row.target_port = None
     row.enabled = bool(snapshot["running"])
     row.config_json = payload
     db.commit()
@@ -139,8 +139,6 @@ def update_udp_config(
     request: Request,
     bind_ip: str = Form(...),
     bind_port: int = Form(...),
-    cloud_ip: str = Form(...),
-    cloud_port: int = Form(...),
     custom_reply_data: str = Form(""),
     hex_mode: str | None = Form(default=None),
     user: User = Depends(require_role("admin", "operator")),
@@ -150,8 +148,6 @@ def update_udp_config(
         {
             "bind_ip": bind_ip,
             "bind_port": bind_port,
-            "cloud_ip": cloud_ip,
-            "cloud_port": cloud_port,
             "custom_reply_data": custom_reply_data,
             "hex_mode": hex_mode == "on",
         }
