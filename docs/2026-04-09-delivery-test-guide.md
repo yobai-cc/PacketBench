@@ -9,6 +9,8 @@
 - TCP/UDP Client
 - Users 页面
 - Packets / Logs 最小筛选
+- client / tcp-server / udp-server 运行态失败 inline error 提示
+- `/ws/runtime` 最小 smoke 覆盖
 
 ## Recommended Accounts
 
@@ -37,6 +39,16 @@
 7. Verify UDP server start, manual send, and stop.
 8. Verify failed runtime actions show inline error and appear in `/logs`.
 9. Verify `/packets` and `/logs` filters return expected rows.
+
+## Current Verification Baseline
+
+- Targeted delivery suite: PASS
+- Full `pytest`: PASS
+- `preflight`: PASS
+- Startup smoke:
+  - `/login` returns `200`
+  - unauthenticated `/client` redirects to `/login`
+  - unauthenticated `/tcp-server` redirects to `/login`
 
 ## Known Limits
 

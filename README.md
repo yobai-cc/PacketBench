@@ -13,7 +13,7 @@
 - 系统日志页
 - Caddy 与 systemd 示例配置
 
-第二阶段当前已完成：
+第二阶段功能已完成：
 
 - TCP Server MVP
   - 监听配置保存
@@ -32,10 +32,13 @@
   - Client TX/RX 计数
   - Client packet/system log 落库
 
-第二阶段待补：
+第二阶段交付前收口已补齐：
 
 - 用户管理页面
-- 更完整的筛选与运行态审计
+- Packets / Logs 最小筛选
+- client / tcp-server / udp-server 运行态错误提示与基础审计
+- 登录 / Session / 权限行为的真实 HTTP 集成测试
+- `/ws/runtime` 最小 smoke 测试
 
 ## 本地运行
 
@@ -74,6 +77,7 @@ python -m venv .venv
 默认登录账号来自 `.env` 或 `.env.example` 中的 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`。
 
 - 交付测试流程可参考 `docs/2026-04-09-delivery-test-guide.md`
+- 当前开发进度快照可参考 `docs/2026-04-09-development-status.md`
 
 ## TCP Server MVP 说明
 
