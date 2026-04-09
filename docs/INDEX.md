@@ -8,6 +8,8 @@
   - 当前开发进度快照，适合开发同步时优先阅读。
 - `2026-04-09-delivery-test-guide.md`
   - 当前交付测试说明，适合测试与验收使用。
+- `ai-maintenance-guide.md`
+  - 个人维护手册与 AI 智能体工作约束，适合日常维护前优先阅读。
 
 ## Historical Snapshots
 
