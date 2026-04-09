@@ -16,7 +16,7 @@ class PacketLogger:
     def __init__(self) -> None:
         settings = get_settings()
         settings.log_dir.mkdir(parents=True, exist_ok=True)
-        self.logger = logging.getLogger("u2t.packet")
+        self.logger = logging.getLogger("packetbench.packet")
         self.logger.setLevel(logging.INFO)
         self.logger.propagate = False
         if not self.logger.handlers:

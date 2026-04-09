@@ -66,3 +66,11 @@ def test_operator_can_update_client_config_through_real_post(client, db_engine):
     assert response.status_code == 200
     assert "Client 配置已更新" in response.text
     assert "9201" in response.text
+
+
+def test_login_page_uses_packetbench_branding(client):
+    response = client.get("/login")
+
+    assert response.status_code == 200
+    assert "PacketBench 登录" in response.text
+    assert "U2T Web 登录" not in response.text

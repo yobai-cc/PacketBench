@@ -1,5 +1,7 @@
 # 2026-04-09 Development Status
 
+- 当前版本：`v0.1.0`
+
 ## Current State
 
 - 当前仓库已完成 FastAPI + Jinja2 SSR 形态下的 Phase 2 主要功能闭环。

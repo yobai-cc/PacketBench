@@ -1,6 +1,8 @@
-# U2T Web Platform
+# PacketBench
 
-轻量级 Web 版 TCP/UDP 调试平台，使用 FastAPI + Jinja2 + HTMX + SQLite 构建。
+轻量级 Web 版 TCP/UDP 调试工作台，使用 FastAPI + Jinja2 + HTMX + SQLite 构建。
+
+当前版本：`v0.1.0`
 
 ## 当前阶段
 
@@ -127,14 +129,14 @@ sudo apt install -y python3 python3-venv python3-pip caddy
 2. 部署项目到目标目录
 
 ```bash
-sudo mkdir -p /opt/u2t_web
-sudo chown -R $USER:$USER /opt/u2t_web
+sudo mkdir -p /opt/packetbench
+sudo chown -R $USER:$USER /opt/packetbench
 ```
 
 3. 上传项目文件并进入目录
 
 ```bash
-cd /opt/u2t_web
+cd /opt/packetbench
 ```
 
 4. 初始化 Python 虚拟环境并安装依赖
@@ -169,10 +171,10 @@ cp .env.example .env
 7. 安装 systemd 服务
 
 ```bash
-sudo cp systemd/app.service /etc/systemd/system/u2t-web.service
+sudo cp systemd/app.service /etc/systemd/system/packetbench.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now u2t-web.service
-sudo systemctl status u2t-web.service
+sudo systemctl enable --now packetbench.service
+sudo systemctl status packetbench.service
 ```
 
 8. 配置 Caddy 反代 Web

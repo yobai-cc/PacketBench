@@ -25,7 +25,7 @@ def create_app() -> FastAPI:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.log_dir.mkdir(parents=True, exist_ok=True)
 
-    app = FastAPI(title="U2T Web Platform", lifespan=lifespan)
+    app = FastAPI(title="PacketBench", version="v0.1.0", lifespan=lifespan)
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.secret_key,

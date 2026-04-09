@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     data_dir: Path = Field(default=BASE_DIR / "data", alias="DATA_DIR")
     app_log_file: str = Field(default="app.log", alias="APP_LOG_FILE")
     packet_log_file: str = Field(default="packets.log", alias="PACKET_LOG_FILE")
-    session_cookie_name: str = Field(default="u2t_session", alias="SESSION_COOKIE_NAME")
+    session_cookie_name: str = Field(default="packetbench_session", alias="SESSION_COOKIE_NAME")
     session_secure: bool = Field(default=False, alias="SESSION_SECURE")
 
     @property

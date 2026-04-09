@@ -16,7 +16,7 @@ class SystemLogService:
     def __init__(self) -> None:
         self.settings = get_settings()
         self.settings.log_dir.mkdir(parents=True, exist_ok=True)
-        self.logger = logging.getLogger("u2t.app")
+        self.logger = logging.getLogger("packetbench.app")
         self.logger.setLevel(logging.INFO)
         self.logger.propagate = False
         if not self.logger.handlers:
