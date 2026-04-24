@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timedelta, timezone
+
 from fastapi import APIRouter, Depends, Form, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -21,8 +23,19 @@ router = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory="app/templates")
 
 
+UTC_PLUS_8 = timezone(timedelta(hours=8))
+
+
 def _base_context(request: Request, user: User) -> dict[str, object]:
     return {"request": request, "current_user": user}
+
+
+def _format_utc_minus_8(value) -> str:
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(UTC_PLUS_8).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _users_context(request: Request, user: User, db: Session) -> dict[str, object]:
@@ -43,6 +56,180 @@ def _runtime_error(
     context[context_key] = snapshot
     context["error"] = error_message
     return templates.TemplateResponse(request, template_name, context)
+
+
+def _format_udp_addr(addr: tuple[str, int] | None) -> str:
+    if not addr:
+        return "无"
+    return f"{addr[0]}:{addr[1]}"
+
+
+def _udp_log_rows(
+    db: Session | None,
+    *,
+    log_type: str = "",
+    source_ip: str = "",
+    query_text: str = "",
+    limit: int = 50,
+) -> list[dict[str, object]]:
+    if db is None:
+        return []
+
+    rows: list[dict[str, object]] = []
+
+    packet_query = db.query(PacketLog).filter(PacketLog.service_type == "udp_server")
+    if source_ip:
+        packet_query = packet_query.filter(PacketLog.src_ip == source_ip)
+    if log_type == "rx":
+        packet_query = packet_query.filter(PacketLog.direction == "device -> server")
+    elif log_type == "tx":
+        packet_query = packet_query.filter(PacketLog.direction.in_(["server -> device", "manual"]))
+    if query_text:
+        like = f"%{query_text.strip()}%"
+        packet_query = packet_query.filter(
+            or_(
+                PacketLog.data_text.ilike(like),
+                PacketLog.data_hex.ilike(like),
+                PacketLog.src_ip.ilike(like),
+                PacketLog.dst_ip.ilike(like),
+            )
+        )
+
+    if log_type not in {"system", "error"}:
+        for row in packet_query.order_by(PacketLog.created_at.desc()).limit(limit).all():
+            rows.append(
+                {
+                    "created_at": row.created_at,
+                    "created_at_text": _format_utc_minus_8(row.created_at),
+                    "type": "接收" if row.direction == "device -> server" else "发送",
+                    "peer": f"{row.src_ip}:{row.src_port}" if row.direction == "device -> server" else f"{row.dst_ip}:{row.dst_port}",
+                    "length": row.length,
+                    "summary": row.data_text or row.data_hex,
+                    "detail": row.data_hex,
+                }
+            )
+
+    system_query = db.query(SystemLog)
+    if log_type == "error":
+        system_query = system_query.filter(SystemLog.level == "error")
+    elif log_type == "system":
+        system_query = system_query.filter(SystemLog.level != "error")
+    elif log_type:
+        system_query = system_query.filter(SystemLog.id == 0)
+    if query_text:
+        like = f"%{query_text.strip()}%"
+        system_query = system_query.filter(or_(SystemLog.message.ilike(like), SystemLog.detail.ilike(like)))
+
+    if log_type in {"", "system", "error"}:
+        for row in system_query.order_by(SystemLog.created_at.desc()).limit(limit).all():
+            rows.append(
+                {
+                    "created_at": row.created_at,
+                    "created_at_text": _format_utc_minus_8(row.created_at),
+                    "type": "异常" if row.level == "error" else "系统",
+                    "peer": "-",
+                    "length": 0,
+                    "summary": row.message,
+                    "detail": row.detail,
+                }
+            )
+
+    rows.sort(key=lambda item: item["created_at"], reverse=True)
+    return rows[:limit]
+
+
+def _runtime_log_rows(
+    db: Session | None,
+    *,
+    service_type: str,
+    system_keyword: str,
+    limit: int = 50,
+) -> list[dict[str, object]]:
+    if db is None or not hasattr(db, "query"):
+        return []
+
+    rows: list[dict[str, object]] = []
+    packet_rows = (
+        db.query(PacketLog)
+        .filter(PacketLog.service_type == service_type)
+        .order_by(PacketLog.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    for row in packet_rows:
+        is_rx = "-> server" in row.direction or row.direction == "remote -> client"
+        peer = f"{row.src_ip}:{row.src_port}" if is_rx else f"{row.dst_ip}:{row.dst_port}"
+        rows.append(
+            {
+                "created_at": row.created_at,
+                "created_at_text": _format_utc_minus_8(row.created_at),
+                "type": "接收" if is_rx else "发送",
+                "peer": peer,
+                "length": row.length,
+                "summary": row.data_text or row.data_hex,
+                "detail": row.data_hex,
+            }
+        )
+
+    system_rows = (
+        db.query(SystemLog)
+        .filter(SystemLog.message.ilike(f"%{system_keyword}%"))
+        .order_by(SystemLog.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    for row in system_rows:
+        rows.append(
+            {
+                "created_at": row.created_at,
+                "created_at_text": _format_utc_minus_8(row.created_at),
+                "type": "异常" if row.level.lower() == "error" else "系统",
+                "peer": "-",
+                "length": 0,
+                "summary": row.message,
+                "detail": row.detail,
+            }
+        )
+
+    rows.sort(key=lambda item: item["created_at"], reverse=True)
+    return rows[:limit]
+
+
+def _udp_page_context(
+    request: Request,
+    user: User,
+    db: Session,
+    *,
+    log_type: str = "",
+    source_ip: str = "",
+    query_text: str = "",
+    limit: int = 50,
+) -> dict[str, object]:
+    context = _base_context(request, user)
+    snapshot = runtime_manager.udp_snapshot()
+    context["udp"] = snapshot
+    context["udp_logs"] = _udp_log_rows(db, log_type=log_type, source_ip=source_ip, query_text=query_text, limit=limit)
+    context["selected_log_type"] = log_type
+    context["selected_source_ip"] = source_ip
+    context["query_text"] = query_text
+    context["log_limit"] = limit
+    context["current_target_label"] = _format_udp_addr(snapshot.get("current_target_addr"))
+    context["last_source_label"] = _format_udp_addr(snapshot.get("last_client_addr"))
+    return context
+
+
+def _tcp_page_context(request: Request, user: User, db: Session | None = None) -> dict[str, object]:
+    context = _base_context(request, user)
+    context["tcp"] = runtime_manager.tcp_snapshot()
+    context["tcp_logs"] = _runtime_log_rows(db, service_type="tcp_server", system_keyword="TCP", limit=50)
+    return context
+
+
+def _client_page_context(request: Request, user: User, db: Session | None = None) -> dict[str, object]:
+    context = _base_context(request, user)
+    context["client"] = runtime_manager.client_snapshot()
+    context["client_logs"] = _runtime_log_rows(db, service_type="client", system_keyword="Client", limit=50)
+    return context
 
 
 def _save_udp_config(db: Session, snapshot: dict[str, object]) -> None:
@@ -128,9 +315,16 @@ def dashboard(request: Request, user: User = Depends(get_current_user), db: Sess
 
 
 @router.get("/udp-server", response_class=HTMLResponse)
-def udp_server_page(request: Request, user: User = Depends(get_current_user)):
-    context = _base_context(request, user)
-    context["udp"] = runtime_manager.udp_snapshot()
+def udp_server_page(
+    request: Request,
+    log_type: str = "",
+    source_ip: str = "",
+    q: str = "",
+    limit: int = 50,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    context = _udp_page_context(request, user, db, log_type=log_type, source_ip=source_ip, query_text=q, limit=limit)
     return templates.TemplateResponse(request, "udp_server.html", context)
 
 
@@ -139,23 +333,30 @@ def update_udp_config(
     request: Request,
     bind_ip: str = Form(...),
     bind_port: int = Form(...),
-    custom_reply_data: str = Form(""),
+    custom_reply_data: str | None = Form(default=None),
+    reply_mode: str | None = Form(default=None),
     hex_mode: str | None = Form(default=None),
     user: User = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
  ):
+    current_snapshot = runtime_manager.udp_snapshot()
+    if reply_mode is None:
+        reply_payload = str(current_snapshot["custom_reply_data"])
+    else:
+        reply_payload = custom_reply_data or "" if reply_mode == "fixed" else ""
+    hex_enabled = bool(current_snapshot["hex_mode"]) if hex_mode is None else hex_mode == "on"
     runtime_manager.apply_udp_config(
         {
             "bind_ip": bind_ip,
             "bind_port": bind_port,
-            "custom_reply_data": custom_reply_data,
-            "hex_mode": hex_mode == "on",
+            "custom_reply_data": reply_payload,
+            "hex_mode": hex_enabled,
         }
     )
     snapshot = runtime_manager.udp_snapshot()
     _save_udp_config(db, snapshot)
     system_log_service.log_to_db("info", "config", f"UDP config updated by {user.username}", db=db)
-    context = _base_context(request, user)
+    context = _udp_page_context(request, user, db)
     context["udp"] = snapshot
     context["message"] = "UDP 配置已更新"
     return templates.TemplateResponse(request, "udp_server.html", context)
@@ -171,19 +372,14 @@ async def start_udp_server(
         await runtime_manager.udp_server.start()
     except Exception as exc:
         system_log_service.log_to_db("error", "service", f"UDP server start failed by {user.username}", str(exc), db=db)
-        return _runtime_error(
-            request,
-            user,
-            "udp_server.html",
-            "udp",
-            runtime_manager.udp_snapshot(),
-            f"UDP 服务启动失败：{exc}",
-        )
+        context = _udp_page_context(request, user, db)
+        context["error"] = f"UDP 服务启动失败：{exc}"
+        return templates.TemplateResponse(request, "udp_server.html", context)
 
     snapshot = runtime_manager.udp_snapshot()
     _save_udp_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"UDP server started by {user.username}", db=db)
-    context = _base_context(request, user)
+    context = _udp_page_context(request, user, db)
     context["udp"] = snapshot
     context["message"] = "UDP 服务已启动"
     return templates.TemplateResponse(request, "udp_server.html", context)
@@ -199,19 +395,14 @@ async def stop_udp_server(
         await runtime_manager.udp_server.stop()
     except Exception as exc:
         system_log_service.log_to_db("error", "service", f"UDP server stop failed by {user.username}", str(exc), db=db)
-        return _runtime_error(
-            request,
-            user,
-            "udp_server.html",
-            "udp",
-            runtime_manager.udp_snapshot(),
-            f"UDP 服务停止失败：{exc}",
-        )
+        context = _udp_page_context(request, user, db)
+        context["error"] = f"UDP 服务停止失败：{exc}"
+        return templates.TemplateResponse(request, "udp_server.html", context)
 
     snapshot = runtime_manager.udp_snapshot()
     _save_udp_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"UDP server stopped by {user.username}", db=db)
-    context = _base_context(request, user)
+    context = _udp_page_context(request, user, db)
     context["udp"] = snapshot
     context["message"] = "UDP 服务已停止"
     return templates.TemplateResponse(request, "udp_server.html", context)
@@ -230,19 +421,41 @@ async def send_udp_manual(
         system_log_service.log_to_db(
             "error", "network", f"Manual UDP payload send failed by {user.username}", str(exc), db=db
         )
-        return _runtime_error(
-            request,
-            user,
-            "udp_server.html",
-            "udp",
-            runtime_manager.udp_snapshot(),
-            f"UDP 手动发送失败：{exc}",
-        )
+        context = _udp_page_context(request, user, db)
+        context["error"] = f"UDP 手动发送失败：{exc}"
+        return templates.TemplateResponse(request, "udp_server.html", context)
 
     system_log_service.log_to_db("info", "network", f"Manual UDP payload sent by {user.username}", db=db)
-    context = _base_context(request, user)
-    context["udp"] = runtime_manager.udp_snapshot()
+    context = _udp_page_context(request, user, db)
     context["message"] = "手动发送已触发"
+    return templates.TemplateResponse(request, "udp_server.html", context)
+
+
+@router.post("/udp-server/target", response_class=HTMLResponse)
+def select_udp_target(
+    request: Request,
+    peer_addr: str = Form(...),
+    user: User = Depends(require_role("admin", "operator")),
+    db: Session = Depends(get_db),
+):
+    runtime_manager.udp_server.select_target_from_label(peer_addr)
+    system_log_service.log_to_db("info", "network", f"UDP target selected by {user.username}", peer_addr, db=db)
+    context = _udp_page_context(request, user, db)
+    context["message"] = "已切换当前目标来源"
+    return templates.TemplateResponse(request, "udp_server.html", context)
+
+
+@router.post("/udp-server/peer/remove", response_class=HTMLResponse)
+def remove_udp_peer(
+    request: Request,
+    peer_addr: str = Form(...),
+    user: User = Depends(require_role("admin", "operator")),
+    db: Session = Depends(get_db),
+):
+    runtime_manager.udp_server.remove_peer(peer_addr)
+    system_log_service.log_to_db("info", "network", f"UDP peer removed by {user.username}", peer_addr, db=db)
+    context = _udp_page_context(request, user, db)
+    context["message"] = "来源记录已移除"
     return templates.TemplateResponse(request, "udp_server.html", context)
 
 
@@ -327,9 +540,12 @@ def logs(
 
 
 @router.get("/tcp-server", response_class=HTMLResponse)
-def tcp_server_page(request: Request, user: User = Depends(get_current_user)):
-    context = _base_context(request, user)
-    context["tcp"] = runtime_manager.tcp_snapshot()
+def tcp_server_page(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    context = _tcp_page_context(request, user, db)
     return templates.TemplateResponse(request, "tcp_server.html", context)
 
 
@@ -352,7 +568,7 @@ def update_tcp_config(
     snapshot = runtime_manager.tcp_snapshot()
     _save_tcp_config(db, snapshot)
     system_log_service.log_to_db("info", "config", f"TCP config updated by {user.username}", db=db)
-    context = _base_context(request, user)
+    context = _tcp_page_context(request, user, db)
     context["tcp"] = snapshot
     context["message"] = "TCP 配置已更新"
     return templates.TemplateResponse(request, "tcp_server.html", context)
@@ -380,7 +596,7 @@ async def start_tcp_server(
     snapshot = runtime_manager.tcp_snapshot()
     _save_tcp_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"TCP server started by {user.username}", db=db)
-    context = _base_context(request, user)
+    context = _tcp_page_context(request, user, db)
     context["tcp"] = snapshot
     context["message"] = "TCP 服务已启动"
     return templates.TemplateResponse(request, "tcp_server.html", context)
@@ -408,7 +624,7 @@ async def stop_tcp_server(
     snapshot = runtime_manager.tcp_snapshot()
     _save_tcp_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"TCP server stopped by {user.username}", db=db)
-    context = _base_context(request, user)
+    context = _tcp_page_context(request, user, db)
     context["tcp"] = snapshot
     context["message"] = "TCP 服务已停止"
     return templates.TemplateResponse(request, "tcp_server.html", context)
@@ -444,7 +660,7 @@ async def send_tcp_manual(
     snapshot = runtime_manager.tcp_snapshot()
     _save_tcp_config(db, snapshot)
     system_log_service.log_to_db("info", "network", f"Manual TCP payload sent by {user.username} to {client_id}", db=db)
-    context = _base_context(request, user)
+    context = _tcp_page_context(request, user, db)
     context["tcp"] = snapshot
     context["message"] = "TCP 手动发送已触发"
     return templates.TemplateResponse(request, "tcp_server.html", context)
@@ -475,16 +691,19 @@ async def disconnect_tcp_client(
     snapshot = runtime_manager.tcp_snapshot()
     _save_tcp_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"TCP client disconnected {client_id} by {user.username}", db=db)
-    context = _base_context(request, user)
+    context = _tcp_page_context(request, user, db)
     context["tcp"] = snapshot
     context["message"] = "TCP 客户端已断开"
     return templates.TemplateResponse(request, "tcp_server.html", context)
 
 
 @router.get("/client", response_class=HTMLResponse)
-def client_page(request: Request, user: User = Depends(get_current_user)):
-    context = _base_context(request, user)
-    context["client"] = runtime_manager.client_snapshot()
+def client_page(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    context = _client_page_context(request, user, db)
     return templates.TemplateResponse(request, "client.html", context)
 
 
@@ -519,7 +738,7 @@ def update_client_config(
     snapshot = runtime_manager.client_snapshot()
     _save_client_config(db, snapshot)
     system_log_service.log_to_db("info", "config", f"Client config updated by {user.username}", db=db)
-    context = _base_context(request, user)
+    context = _client_page_context(request, user, db)
     context["client"] = snapshot
     context["message"] = "Client 配置已更新"
     return templates.TemplateResponse(request, "client.html", context)
@@ -547,7 +766,7 @@ async def connect_client(
     snapshot = runtime_manager.client_snapshot()
     _save_client_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"Client connected by {user.username}", db=db)
-    context = _base_context(request, user)
+    context = _client_page_context(request, user, db)
     context["client"] = snapshot
     context["message"] = "Client 已连接"
     return templates.TemplateResponse(request, "client.html", context)
@@ -575,7 +794,7 @@ async def disconnect_client(
     snapshot = runtime_manager.client_snapshot()
     _save_client_config(db, snapshot)
     system_log_service.log_to_db("info", "service", f"Client disconnected by {user.username}", db=db)
-    context = _base_context(request, user)
+    context = _client_page_context(request, user, db)
     context["client"] = snapshot
     context["message"] = "Client 已断开"
     return templates.TemplateResponse(request, "client.html", context)
@@ -606,7 +825,7 @@ async def send_client_manual(
     snapshot = runtime_manager.client_snapshot()
     _save_client_config(db, snapshot)
     system_log_service.log_to_db("info", "network", f"Manual client payload sent by {user.username}", db=db)
-    context = _base_context(request, user)
+    context = _client_page_context(request, user, db)
     context["client"] = snapshot
     context["message"] = "Client 手动发送已触发"
     return templates.TemplateResponse(request, "client.html", context)

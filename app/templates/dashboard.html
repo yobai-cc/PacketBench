@@ -2,26 +2,34 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <section class="page-header">
-  <h1>控制台</h1>
-  <p>欢迎，{{ current_user.username }}（{{ current_user.role }}）</p>
+  <h1>Dashboard</h1>
+  <p>查看当前用户、服务状态和记录数量。详细记录请前往 Packets / Logs 查看。</p>
 </section>
-<section class="grid two">
-  <article class="card">
-    <h2>UDP 服务状态</h2>
-    <p>运行中：{{ '是' if udp.running else '否' }}</p>
-    <p>监听：{{ udp.bind_ip }}:{{ udp.bind_port }}</p>
-    <p>回复模式：固定自定义数据</p>
-    <p>TX：{{ udp.tx_count }} bytes</p>
-    <p>RX：{{ udp.rx_count }} bytes</p>
+
+<section class="dashboard-grid">
+  <article class="status-card">
+    <span>当前用户</span>
+    <strong>{{ current_user.username }}</strong>
+    <p class="card-help">角色：<span class="badge badge-info">{{ current_user.role }}</span></p>
   </article>
-  <article class="card">
-    <h2>数据概览</h2>
-    <p>协议包记录：{{ packet_count }}</p>
-    <p>系统日志：{{ system_log_count }}</p>
+  <article class="status-card">
+    <span>UDP 服务</span>
+    <strong class="status-pill {{ 'status-running' if udp.running else 'status-idle' }}">{{ '运行中' if udp.running else '未启动' }}</strong>
+    <p class="card-help">绑定：{{ udp.bind_ip }}:{{ udp.bind_port }}</p>
+  </article>
+  <article class="status-card">
+    <span>Packets</span>
+    <strong>{{ packet_count }}</strong>
+    <p class="card-help">协议包记录总数</p>
+  </article>
+  <article class="status-card">
+    <span>Logs</span>
+    <strong>{{ system_log_count }}</strong>
+    <p class="card-help">系统日志总数</p>
   </article>
 </section>
-<section class="card">
-  <h2>实时状态</h2>
-  <pre id="runtime-stream" class="log-box">等待 WebSocket 数据...</pre>
+
+<section class="info-alert" style="margin-top: 20px;">
+  页面使用刷新方式展示当前状态。详细协议包记录请前往 Packets 页面查看，系统操作和异常日志请前往 Logs 页面查看。
 </section>
 {% endblock %}

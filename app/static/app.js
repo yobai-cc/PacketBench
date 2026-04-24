@@ -12,6 +12,9 @@
 
     socket.onmessage = (event) => {
       const payload = JSON.parse(event.data);
+      if (payload.type === "snapshot") {
+        return;
+      }
       const text = JSON.stringify(payload, null, 2);
       logBox.textContent = `${new Date().toLocaleString()}\n${text}\n\n${logBox.textContent}`;
     };

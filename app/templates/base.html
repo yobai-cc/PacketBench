@@ -14,17 +14,17 @@
       <div class="brand">PacketBench</div>
       {% if current_user %}
       <nav>
-        <a href="/dashboard">Dashboard</a>
-        <a href="/udp-server">UDP Server</a>
-        <a href="/tcp-server">TCP Server</a>
-        <a href="/client">Client</a>
-        <a href="/packets">Packets</a>
-        <a href="/logs">Logs</a>
+        <a href="/dashboard" {% if request.url.path == '/dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+        <a href="/udp-server" {% if request.url.path == '/udp-server' %}aria-current="page"{% endif %}>UDP Server</a>
+        <a href="/tcp-server" {% if request.url.path == '/tcp-server' %}aria-current="page"{% endif %}>TCP Server</a>
+        <a href="/client" {% if request.url.path == '/client' %}aria-current="page"{% endif %}>Client</a>
+        <a href="/packets" {% if request.url.path == '/packets' %}aria-current="page"{% endif %}>Packets</a>
+        <a href="/logs" {% if request.url.path == '/logs' %}aria-current="page"{% endif %}>Logs</a>
         {% if current_user.role == 'admin' %}
-        <a href="/users">Users</a>
+        <a href="/users" {% if request.url.path == '/users' %}aria-current="page"{% endif %}>Users</a>
         {% endif %}
       </nav>
-      <form method="post" action="/logout">
+      <form method="post" action="/logout" class="sidebar-logout">
         <button class="ghost" type="submit">退出登录</button>
       </form>
       {% endif %}

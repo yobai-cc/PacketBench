@@ -1,46 +1,205 @@
 {% extends "base.html" %}
 {% block title %}UDP Server{% endblock %}
 {% block content %}
-<section class="page-header">
-  <h1>UDP Server</h1>
-  {% if message %}<div class="alert success">{{ message }}</div>{% endif %}
-  {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
-</section>
-<section class="grid two">
-  <article class="card">
-    <h2>服务配置</h2>
-    <p>收到设备 UDP 报文后，服务会立即回发下方配置的固定自定义数据。</p>
-    <form method="post" action="/udp-server/config">
-      <label>绑定 IP<input name="bind_ip" value="{{ udp.bind_ip }}" required></label>
-      <label>绑定端口<input name="bind_port" type="number" value="{{ udp.bind_port }}" required></label>
-      <label>自动回复数据<textarea name="custom_reply_data">{{ udp.custom_reply_data }}</textarea></label>
-      <label class="checkbox"><input name="hex_mode" type="checkbox" {% if udp.hex_mode %}checked{% endif %}> Hex 模式</label>
-      <button type="submit">保存配置</button>
-    </form>
-  </article>
-  <article class="card">
-    <h2>运行状态</h2>
-    <p>运行中：{{ '是' if udp.running else '否' }}</p>
-    <p>回复模式：固定自动回复</p>
-    <p>最后客户端：{{ udp.last_client_addr or '无' }}</p>
-    <p>TX：{{ udp.tx_count }} bytes</p>
-    <p>RX：{{ udp.rx_count }} bytes</p>
-    <div class="button-row">
-      <form method="post" action="/udp-server/start"><button type="submit">启动</button></form>
-      <form method="post" action="/udp-server/stop"><button type="submit" class="danger">停止</button></form>
+<div class="workbench-shell">
+  <section class="workbench-header">
+    <div>
+      <h1>UDP Server</h1>
+      <p class="page-subtitle">监听设备 UDP 报文，按固定规则自动回复，并可手动向当前目标来源发送数据。</p>
+      {% if message %}<div class="alert success">{{ message }}</div>{% endif %}
+      {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
     </div>
-  </article>
-</section>
-<section class="card">
-  <h2>手动发送</h2>
-  <p>手动发送会发往最近一次发包的终端地址；如果当前没有设备地址，会提示失败。</p>
-  <form method="post" action="/udp-server/send">
-    <label>发送数据<textarea name="payload"></textarea></label>
-    <button type="submit">发送</button>
-  </form>
-</section>
-<section class="card">
-  <h2>实时日志</h2>
-  <pre id="runtime-stream" class="log-box">等待 WebSocket 数据...</pre>
-</section>
+    {% if current_user.role != 'viewer' %}
+    <div class="header-actions">
+      <div class="button-row">
+        <form method="post" action="/udp-server/start"><button type="submit" {% if udp.running %}disabled title="UDP 服务已在运行"{% endif %}>启动服务</button></form>
+        <form method="post" action="/udp-server/stop"><button type="submit" class="danger" {% if not udp.running %}disabled title="UDP 服务尚未启动"{% endif %}>停止服务</button></form>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="status-strip">
+    <div class="status-card">
+      <span>服务状态</span>
+      <strong class="status-pill {{ 'status-running' if udp.running else 'status-idle' }}">{{ '运行中' if udp.running else '未启动' }}</strong>
+    </div>
+    <div class="status-card">
+      <span>绑定地址</span>
+      <strong>{{ udp.bind_ip }}:{{ udp.bind_port }}</strong>
+    </div>
+    <div class="status-card">
+      <span>最近来源 / 当前目标</span>
+      <strong>{{ current_target_label }}</strong>
+    </div>
+    <div class="status-card">
+      <span>RX</span>
+      <strong>{{ udp.rx_count }} bytes</strong>
+    </div>
+    <div class="status-card">
+      <span>TX</span>
+      <strong>{{ udp.tx_count }} bytes</strong>
+    </div>
+  </section>
+
+  <section class="workspace-grid">
+    <div class="workspace-main">
+      <article class="panel">
+        <h2>基础设置</h2>
+        <p class="panel-note">修改绑定地址后，重新启动 UDP 服务使配置生效。</p>
+        <form method="post" action="/udp-server/config">
+          <div class="compact-form-row">
+            <label>绑定 IP<input name="bind_ip" value="{{ udp.bind_ip }}" required {% if current_user.role == 'viewer' %}disabled{% endif %}></label>
+            <label>绑定端口<input name="bind_port" type="number" value="{{ udp.bind_port }}" required {% if current_user.role == 'viewer' %}disabled{% endif %}></label>
+          </div>
+          <label class="checkbox"><input name="hex_mode" type="checkbox" {% if udp.hex_mode %}checked{% endif %} {% if current_user.role == 'viewer' %}disabled{% endif %}> 发送和自动回复均按 HEX 解析</label>
+          {% if current_user.role != 'viewer' %}<button type="submit">保存配置</button>{% endif %}
+        </form>
+      </article>
+
+      <article class="panel">
+        <h2>发送区</h2>
+        <p><strong>当前目标来源地址：</strong>{{ current_target_label }}</p>
+        <p class="panel-note">如果没有目标来源地址，请先等待设备来包并在来源地址列表中设为当前目标。</p>
+        {% if current_user.role != 'viewer' %}
+        <form method="post" action="/udp-server/send">
+          <label>发送内容<textarea name="payload"></textarea></label>
+          <div class="button-row compact">
+            <button type="submit" {% if not udp.running or current_target_label == '无' %}disabled title="请先启动 UDP 服务并指定一个目标来源地址"{% endif %}>发送</button>
+            <button type="reset" class="ghost">清空</button>
+          </div>
+        </form>
+        {% if not udp.running or current_target_label == '无' %}
+        <p class="card-help">请先启动 UDP 服务，并等待设备来包或指定当前目标来源地址。</p>
+        {% endif %}
+        {% else %}
+        <p>Viewer 角色仅可查看 UDP 运行状态。</p>
+        {% endif %}
+      </article>
+
+      <article class="panel">
+        <h2>自动回复</h2>
+        <p class="panel-note">开启后，收到报文会立即按下方配置回发；内容为空时不回包。</p>
+        <form method="post" action="/udp-server/config">
+          <input type="hidden" name="bind_ip" value="{{ udp.bind_ip }}">
+          <input type="hidden" name="bind_port" value="{{ udp.bind_port }}">
+          <label>回复模式
+            <select name="reply_mode" {% if current_user.role == 'viewer' %}disabled{% endif %}>
+              <option value="fixed" {% if udp.custom_reply_data %}selected{% endif %}>固定回复</option>
+              <option value="off" {% if not udp.custom_reply_data %}selected{% endif %}>关闭回复</option>
+            </select>
+          </label>
+          <label>回复内容<textarea name="custom_reply_data" id="reply_data_textarea" {% if current_user.role == 'viewer' or not udp.custom_reply_data %}disabled{% endif %}>{{ udp.custom_reply_data }}</textarea></label>
+          {% if current_user.role != 'viewer' %}<button type="submit">保存规则</button>{% endif %}
+        </form>
+      </article>
+    </div>
+
+    <div class="workspace-side">
+      <article class="panel">
+        <h2>来源地址列表</h2>
+        <p class="panel-note">基于最近收到的 UDP 报文维护活跃来源，手动发送默认发往当前目标。</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>来源地址</th><th>首次出现</th><th>最近活动</th><th>收包</th><th>发包</th><th>状态</th><th>操作</th></tr>
+            </thead>
+            <tbody>
+              {% for peer in udp.peers %}
+              <tr>
+                <td class="mono">{{ peer.peer_addr }}</td>
+                <td>{{ peer.first_seen }}</td>
+                <td>{{ peer.last_seen }}</td>
+                <td>{{ peer.rx_packets }} / {{ peer.rx_bytes }} B</td>
+                <td>{{ peer.tx_packets }} / {{ peer.tx_bytes }} B</td>
+                <td>{{ '当前目标' if peer.is_current_target else '活跃' if peer.status == 'active' else '空闲' }}</td>
+                <td>
+                  {% if current_user.role != 'viewer' %}
+                  <div class="inline-actions">
+                    {% if peer.is_current_target %}
+                    <span class="muted" style="font-size: 12px; padding: 4px 8px;">(当前目标)</span>
+                    {% else %}
+                    <form method="post" action="/udp-server/target">
+                      <input type="hidden" name="peer_addr" value="{{ peer.peer_addr }}">
+                      <button type="submit" class="ghost">设为当前目标</button>
+                    </form>
+                    {% endif %}
+                    <form method="post" action="/udp-server/peer/remove">
+                      <input type="hidden" name="peer_addr" value="{{ peer.peer_addr }}">
+                      <button type="submit" class="danger ghost-danger">移除记录</button>
+                    </form>
+                  </div>
+                  {% else %}
+                  只读
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="7">暂无来源地址，请先等待来包。</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>日志区</h2>
+        <form method="get" action="/udp-server" class="filter-row">
+          <label>关键字<input name="q" value="{{ query_text }}"></label>
+          <label>类型
+            <select name="log_type">
+              <option value="" {% if not selected_log_type %}selected{% endif %}>全部</option>
+              <option value="rx" {% if selected_log_type == 'rx' %}selected{% endif %}>接收</option>
+              <option value="tx" {% if selected_log_type == 'tx' %}selected{% endif %}>发送</option>
+              <option value="system" {% if selected_log_type == 'system' %}selected{% endif %}>系统</option>
+              <option value="error" {% if selected_log_type == 'error' %}selected{% endif %}>异常</option>
+            </select>
+          </label>
+          <label>来源 IP<input name="source_ip" value="{{ selected_source_ip }}"></label>
+          <label>最近 N 条<input type="number" name="limit" value="{{ log_limit }}"></label>
+          <button type="submit">筛选</button>
+        </form>
+        <div class="log-scroll">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>时间</th><th>类型</th><th>对端</th><th>长度</th><th>内容摘要</th><th>详情</th></tr>
+            </thead>
+            <tbody>
+              {% for row in udp_logs %}
+              <tr>
+                <td>{{ row.created_at_text }}</td>
+                <td>{{ row.type }}</td>
+                <td class="mono">{{ row.peer }}</td>
+                <td>{{ row.length }}</td>
+                <td>{{ row.summary }}</td>
+                <td class="mono">{{ row.detail }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="6">当前没有符合条件的 UDP 日志。</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        </div>
+      </article>
+    </div>
+  </section>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const replyModeSelect = document.querySelector('select[name="reply_mode"]');
+  const replyDataTextarea = document.getElementById('reply_data_textarea');
+  if (replyModeSelect && replyDataTextarea && !replyDataTextarea.hasAttribute('data-viewer')) {
+    replyModeSelect.addEventListener('change', (e) => {
+      replyDataTextarea.disabled = e.target.value === 'off';
+    });
+  }
+});
+</script>
 {% endblock %}

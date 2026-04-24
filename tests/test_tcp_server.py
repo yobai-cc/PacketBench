@@ -7,7 +7,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import Base
+from app.models.packet_log import PacketLog
 from app.models.service_config import ServiceConfig
+from app.models.system_log import SystemLog
 from app.models.user import User
 from app.services.tcp_server import TCPServerConfig, TCPServerService
 from app.services.runtime_manager import runtime_manager
@@ -158,6 +160,89 @@ def test_tcp_server_page_hides_mutations_for_viewer() -> None:
     assert "/tcp-server/stop" not in body
     assert "/tcp-server/send" not in body
     assert "/tcp-server/disconnect" not in body
+
+
+def test_tcp_server_page_disables_actions_that_cannot_succeed() -> None:
+    from app.routers.pages import tcp_server_page
+
+    request = Request({"type": "http", "method": "GET", "path": "/tcp-server", "headers": [], "query_string": b""})
+    user = User(username="operator-user", password_hash="x", role="operator", is_active=True)
+
+    runtime_manager.tcp_server.update_config(TCPServerConfig())
+    runtime_manager.tcp_server.running = False
+    try:
+        response = tcp_server_page(request, user)
+        body = response.body.decode("utf-8")
+        assert 'data-action="tcp-stop" disabled' in body
+        assert 'data-action="tcp-send" disabled' in body
+        assert "请先启动 TCP 服务并等待客户端连接。" in body
+
+        runtime_manager.tcp_server.running = True
+        response = tcp_server_page(request, user)
+        body = response.body.decode("utf-8")
+        assert 'data-action="tcp-start" disabled' in body
+    finally:
+        runtime_manager.tcp_server.running = False
+        runtime_manager.tcp_server.update_config(TCPServerConfig())
+
+
+def test_tcp_server_page_uses_operations_console_layout() -> None:
+    from app.routers.pages import tcp_server_page
+
+    request = Request({"type": "http", "method": "GET", "path": "/tcp-server", "headers": [], "query_string": b""})
+    user = User(username="operator-user", password_hash="x", role="operator", is_active=True)
+
+    runtime_manager.tcp_server.update_config(TCPServerConfig())
+    runtime_manager.tcp_server.running = False
+    try:
+        response = tcp_server_page(request, user)
+        body = response.body.decode("utf-8")
+        assert 'class="workbench-shell"' in body
+        assert 'class="status-strip"' in body
+        assert 'class="workspace-grid"' in body
+        assert 'class="workspace-main"' in body
+        assert 'class="workspace-side"' in body
+        assert 'class="status-pill status-idle"' in body
+    finally:
+        runtime_manager.tcp_server.running = False
+        runtime_manager.tcp_server.update_config(TCPServerConfig())
+
+
+def test_tcp_server_page_renders_embedded_log_panel(tmp_path) -> None:
+    from app.routers.pages import tcp_server_page
+
+    db_path = tmp_path / "tcp-log-panel.db"
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+
+    user = User(username="operator-user", password_hash="x", role="operator", is_active=True)
+    request = Request({"type": "http", "method": "GET", "path": "/tcp-server", "headers": [], "query_string": b""})
+
+    with Session(engine) as db:
+        db.add(
+            PacketLog(
+                service_type="tcp_server",
+                protocol="TCP",
+                direction="client -> server",
+                src_ip="10.0.0.2",
+                src_port=5000,
+                dst_ip="127.0.0.1",
+                dst_port=9100,
+                data_hex="70696e67",
+                data_text="ping",
+                length=4,
+            )
+        )
+        db.add(SystemLog(level="error", category="network", message="TCP failed", detail="broken pipe"))
+        db.commit()
+
+        response = tcp_server_page(request, user, db)
+
+    body = response.body.decode("utf-8")
+    assert "TCP 日志" in body
+    assert 'class="log-scroll"' in body
+    assert "ping" in body
+    assert "TCP failed" in body
 
 
 def test_tcp_server_routes_do_not_emit_template_deprecation_warning(tmp_path) -> None:

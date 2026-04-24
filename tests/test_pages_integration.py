@@ -74,3 +74,31 @@ def test_login_page_uses_packetbench_branding(client):
     assert response.status_code == 200
     assert "PacketBench 登录" in response.text
     assert "U2T Web 登录" not in response.text
+
+
+def test_sidebar_logout_button_has_distinct_style(client, db_engine):
+    with Session(db_engine) as db:
+        db.add(User(username="admin", password_hash=hash_password("secret123"), role="admin", is_active=True))
+        db.commit()
+
+    login_as(client, "admin", "secret123")
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert 'class="sidebar-logout"' in response.text
+    assert 'class="sidebar"' in response.text
+
+
+def test_dashboard_does_not_show_nonfunctional_runtime_stream(client, db_engine):
+    with Session(db_engine) as db:
+        db.add(User(username="admin", password_hash=hash_password("secret123"), role="admin", is_active=True))
+        db.commit()
+
+    login_as(client, "admin", "secret123")
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert "实时状态" not in response.text
+    assert "等待 WebSocket 数据" not in response.text
+    assert 'id="runtime-stream"' not in response.text
+    assert "页面使用刷新方式展示当前状态" in response.text

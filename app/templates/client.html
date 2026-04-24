@@ -1,64 +1,137 @@
 {% extends "base.html" %}
 {% block title %}TCP/UDP Client{% endblock %}
 {% block content %}
-<section class="page-header">
-  <h1>TCP/UDP Client</h1>
-  {% if message %}<div class="alert success">{{ message }}</div>{% endif %}
-  {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
-</section>
-<section class="grid two">
-  <article class="card">
-    <h2>Client 配置</h2>
-    {% if current_user.role != 'viewer' %}
-    <form method="post" action="/client/config">
-      <label>
-        协议
-        <select name="protocol" {% if client.running %}disabled{% endif %}>
-          <option value="TCP" {% if client.protocol == 'TCP' %}selected{% endif %}>TCP</option>
-          <option value="UDP" {% if client.protocol == 'UDP' %}selected{% endif %}>UDP</option>
-        </select>
-      </label>
-      <label>目标 IP<input name="target_ip" value="{{ client.target_ip }}" required {% if client.running %}disabled{% endif %}></label>
-      <label>目标端口<input name="target_port" type="number" value="{{ client.target_port }}" required {% if client.running %}disabled{% endif %}></label>
-      <label class="checkbox"><input name="hex_mode" type="checkbox" {% if client.hex_mode %}checked{% endif %} {% if client.running %}disabled{% endif %}> Hex 模式</label>
-      <button type="submit" {% if client.running %}disabled{% endif %}>保存配置</button>
-    </form>
-    {% else %}
-    <p>协议：{{ client.protocol }}</p>
-    <p>目标：{{ client.target_ip }}:{{ client.target_port }}</p>
-    <p>Hex 模式：{{ '开' if client.hex_mode else '关' }}</p>
-    {% endif %}
-  </article>
-  <article class="card">
-    <h2>运行状态</h2>
-    <p>运行中：{{ '是' if client.running else '否' }}</p>
-    <p>已连接：{{ '是' if client.connected else '否' }}</p>
-    <p>Peer：{{ client.peer_label }}</p>
-    <p>TX：{{ client.tx_count }} bytes</p>
-    <p>RX：{{ client.rx_count }} bytes</p>
-    {% if current_user.role != 'viewer' %}
-    <div class="button-row">
-      <form method="post" action="/client/connect"><button type="submit">连接</button></form>
-      <form method="post" action="/client/disconnect"><button type="submit" class="danger">断开</button></form>
+<div class="workbench-shell">
+  <section class="workbench-header">
+    <div>
+      <h1>TCP/UDP Client</h1>
+      <p class="page-subtitle">作为客户端连接或发送到指定远端，用于验证设备服务端或上游服务响应。</p>
+      {% if message %}<div class="alert success">{{ message }}</div>{% endif %}
+      {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
     </div>
-    {% else %}
-    <p>Viewer 角色仅可查看 Client 运行状态。</p>
+    {% if current_user.role != 'viewer' %}
+    <div class="header-actions">
+      <div class="button-row">
+        <form method="post" action="/client/connect"><button data-action="client-connect" {% if client.running %}disabled title="Client 已在运行"{% endif %} type="submit">连接</button></form>
+        <form method="post" action="/client/disconnect"><button data-action="client-disconnect" {% if not client.running %}disabled title="Client 尚未连接"{% endif %} type="submit" class="danger">断开</button></form>
+      </div>
+    </div>
     {% endif %}
-  </article>
-</section>
-<section class="card">
-  <h2>手动发送</h2>
-  {% if current_user.role != 'viewer' %}
-  <form method="post" action="/client/send">
-    <label>发送数据<textarea name="payload"></textarea></label>
-    <button type="submit">发送</button>
-  </form>
-  {% else %}
-  <p>Viewer 角色仅可查看 Client 运行状态。</p>
-  {% endif %}
-</section>
-<section class="card">
-  <h2>运行提示</h2>
-  <p>当前页面使用刷新查看最新连接、收发计数以及日志状态。</p>
-</section>
+  </section>
+
+  <section class="status-strip">
+    <div class="status-card">
+      <span>运行状态</span>
+      <strong class="status-pill {{ 'status-running' if client.running else 'status-idle' }}">{{ '运行中' if client.running else '未启动' }}</strong>
+    </div>
+    <div class="status-card">
+      <span>连接状态</span>
+      <strong>{{ '已连接' if client.connected else '未连接' }}</strong>
+    </div>
+    <div class="status-card">
+      <span>协议 / 目标</span>
+      <strong>{{ client.protocol }} {{ client.target_ip }}:{{ client.target_port }}</strong>
+    </div>
+    <div class="status-card">
+      <span>TX</span>
+      <strong>{{ client.tx_count }} bytes</strong>
+    </div>
+    <div class="status-card">
+      <span>RX</span>
+      <strong>{{ client.rx_count }} bytes</strong>
+    </div>
+  </section>
+
+  <section class="workspace-grid">
+    <div class="workspace-main">
+      <article class="panel">
+        <h2>Client 配置</h2>
+        <p class="panel-note">Client 运行中不能修改配置；请先断开再切换协议或目标地址。</p>
+        {% if current_user.role != 'viewer' %}
+        <form method="post" action="/client/config">
+          <label>
+            协议
+            <select name="protocol" {% if client.running %}disabled{% endif %}>
+              <option value="TCP" {% if client.protocol == 'TCP' %}selected{% endif %}>TCP</option>
+              <option value="UDP" {% if client.protocol == 'UDP' %}selected{% endif %}>UDP</option>
+            </select>
+          </label>
+          <div class="compact-form-row">
+            <label>目标 IP<input name="target_ip" value="{{ client.target_ip }}" required {% if client.running %}disabled{% endif %}></label>
+            <label>目标端口<input name="target_port" type="number" value="{{ client.target_port }}" required {% if client.running %}disabled{% endif %}></label>
+          </div>
+          <label class="checkbox"><input name="hex_mode" type="checkbox" {% if client.hex_mode %}checked{% endif %} {% if client.running %}disabled{% endif %}> Hex 模式</label>
+          <button type="submit" {% if client.running %}disabled{% endif %}>保存配置</button>
+        </form>
+        {% else %}
+        <p>协议：{{ client.protocol }}</p>
+        <p>目标：{{ client.target_ip }}:{{ client.target_port }}</p>
+        <p>Hex 模式：{{ '开' if client.hex_mode else '关' }}</p>
+        {% endif %}
+      </article>
+
+      <article class="panel">
+        <h2>手动发送</h2>
+        {% if current_user.role != 'viewer' %}
+        <form method="post" action="/client/send">
+          <label>发送数据<textarea name="payload"></textarea></label>
+          <button data-action="client-send" {% if not client.connected %}disabled title="请先连接 Client，再发送数据"{% endif %} type="submit">发送</button>
+        </form>
+        {% if not client.connected %}
+        <p class="card-help">请先连接 Client，再发送数据。</p>
+        {% endif %}
+        {% else %}
+        <p>Viewer 角色仅可查看 Client 运行状态。</p>
+        {% endif %}
+      </article>
+    </div>
+
+    <div class="workspace-side">
+      <article class="panel">
+        <h2>运行状态</h2>
+        <p>运行中：{{ '是' if client.running else '否' }}</p>
+        <p>已连接：{{ '是' if client.connected else '否' }}</p>
+        <p>Peer：{{ client.peer_label }}</p>
+        <p>Hex 模式：{{ '开' if client.hex_mode else '关' }}</p>
+        {% if current_user.role == 'viewer' %}
+        <p>Viewer 角色仅可查看 Client 运行状态。</p>
+        {% endif %}
+      </article>
+
+      <article class="panel">
+        <h2>运行提示</h2>
+        <p class="panel-note">当前页面使用刷新查看最新连接、收发计数以及日志状态。</p>
+      </article>
+
+      <article class="panel">
+        <h2>Client 日志</h2>
+        <div class="log-scroll">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>时间</th><th>类型</th><th>对端</th><th>长度</th><th>内容摘要</th><th>详情</th></tr>
+            </thead>
+            <tbody>
+              {% for row in client_logs %}
+              <tr>
+                <td>{{ row.created_at_text }}</td>
+                <td>{{ row.type }}</td>
+                <td class="mono">{{ row.peer }}</td>
+                <td>{{ row.length }}</td>
+                <td>{{ row.summary }}</td>
+                <td class="mono">{{ row.detail }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="6"><div class="empty-state">当前没有 Client 日志。</div></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        </div>
+      </article>
+    </div>
+  </section>
+</div>
 {% endblock %}

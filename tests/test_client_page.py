@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from starlette.requests import Request
 
 from app.db import Base
+from app.models.packet_log import PacketLog
 from app.models.service_config import ServiceConfig
+from app.models.system_log import SystemLog
 from app.models.user import User
 from app.services.client_runtime import ClientRuntimeConfig
 from app.services.runtime_manager import runtime_manager
@@ -88,6 +90,94 @@ def test_client_page_hides_mutations_for_viewer() -> None:
     assert "/client/connect" not in body
     assert "/client/disconnect" not in body
     assert "/client/send" not in body
+
+
+def test_client_page_disables_actions_that_cannot_succeed() -> None:
+    from app.routers.pages import client_page
+
+    request = Request({"type": "http", "method": "GET", "path": "/client", "headers": [], "query_string": b""})
+    user = User(username="operator-user", password_hash="x", role="operator", is_active=True)
+
+    runtime_manager.client_runtime.update_config(ClientRuntimeConfig())
+    runtime_manager.client_runtime.running = False
+    runtime_manager.client_runtime.connected = False
+    try:
+        response = client_page(request, user)
+        body = response.body.decode("utf-8")
+        assert 'data-action="client-disconnect" disabled' in body
+        assert 'data-action="client-send" disabled' in body
+        assert "请先连接 Client，再发送数据。" in body
+
+        runtime_manager.client_runtime.running = True
+        runtime_manager.client_runtime.connected = True
+        response = client_page(request, user)
+        body = response.body.decode("utf-8")
+        assert 'data-action="client-connect" disabled' in body
+    finally:
+        runtime_manager.client_runtime.running = False
+        runtime_manager.client_runtime.connected = False
+        runtime_manager.client_runtime.update_config(ClientRuntimeConfig())
+
+
+def test_client_page_uses_operations_console_layout() -> None:
+    from app.routers.pages import client_page
+
+    request = Request({"type": "http", "method": "GET", "path": "/client", "headers": [], "query_string": b""})
+    user = User(username="operator-user", password_hash="x", role="operator", is_active=True)
+
+    runtime_manager.client_runtime.update_config(ClientRuntimeConfig())
+    runtime_manager.client_runtime.running = False
+    runtime_manager.client_runtime.connected = False
+    try:
+        response = client_page(request, user)
+        body = response.body.decode("utf-8")
+        assert 'class="workbench-shell"' in body
+        assert 'class="status-strip"' in body
+        assert 'class="workspace-grid"' in body
+        assert 'class="workspace-main"' in body
+        assert 'class="workspace-side"' in body
+        assert 'class="status-pill status-idle"' in body
+    finally:
+        runtime_manager.client_runtime.running = False
+        runtime_manager.client_runtime.connected = False
+        runtime_manager.client_runtime.update_config(ClientRuntimeConfig())
+
+
+def test_client_page_renders_embedded_log_panel(tmp_path) -> None:
+    from app.routers.pages import client_page
+
+    db_path = tmp_path / "client-log-panel.db"
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+
+    user = User(username="operator-user", password_hash="x", role="operator", is_active=True)
+    request = Request({"type": "http", "method": "GET", "path": "/client", "headers": [], "query_string": b""})
+
+    with Session(engine) as db:
+        db.add(
+            PacketLog(
+                service_type="client",
+                protocol="UDP",
+                direction="client -> remote",
+                src_ip="127.0.0.1",
+                src_port=40000,
+                dst_ip="10.0.0.3",
+                dst_port=9001,
+                data_hex="706f6e67",
+                data_text="pong",
+                length=4,
+            )
+        )
+        db.add(SystemLog(level="error", category="network", message="Client failed", detail="timeout"))
+        db.commit()
+
+        response = client_page(request, user, db)
+
+    body = response.body.decode("utf-8")
+    assert "Client 日志" in body
+    assert 'class="log-scroll"' in body
+    assert "pong" in body
+    assert "Client failed" in body
 
 
 def test_client_routes_do_not_emit_template_deprecation_warning() -> None:

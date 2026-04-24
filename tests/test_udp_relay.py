@@ -40,6 +40,19 @@ def test_track_client_addr_stores_latest_peer() -> None:
     assert service.last_client_addr == ("127.0.0.1", 50123)
 
 
+def test_udp_service_tracks_recent_peers_and_current_target() -> None:
+    service = UDPServerService()
+
+    service.record_client_addr(("10.0.0.8", 4567))
+
+    peers = service.peer_snapshots()
+
+    assert peers[0]["peer_addr"] == "10.0.0.8:4567"
+    assert peers[0]["is_current_target"] is True
+    assert peers[0]["rx_packets"] == 1
+    assert peers[0]["tx_packets"] == 0
+
+
 @pytest.mark.anyio
 async def test_handle_datagram_replies_immediately_to_device(monkeypatch: pytest.MonkeyPatch) -> None:
     service = UDPServerService()

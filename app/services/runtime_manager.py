@@ -24,6 +24,8 @@ class RuntimeManager:
             "tx_count": self.udp_server.tx_count,
             "rx_count": self.udp_server.rx_count,
             "last_client_addr": self.udp_server.last_client_addr,
+            "current_target_addr": self.udp_server.current_target_addr,
+            "peers": self.udp_server.peer_snapshots(),
         }
 
     def apply_udp_config(self, payload: dict[str, object]) -> UDPServerConfig:

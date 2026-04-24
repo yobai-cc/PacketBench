@@ -2,7 +2,8 @@
 {% block title %}Packets{% endblock %}
 {% block content %}
 <section class="page-header">
-  <h1>协议数据包</h1>
+  <h1>Packets</h1>
+  <p>查看协议包记录。HEX 字段使用等宽字体，表格可横向滚动。</p>
 </section>
 <section class="card">
   <form method="get" action="/packets" class="filter-row">
@@ -48,12 +49,18 @@
           <td>{{ row.created_at }}</td>
           <td>{{ row.service_type }}</td>
           <td>{{ row.protocol }}</td>
-          <td>{{ row.direction }}</td>
+          <td><span class="badge {{ 'badge-success' if '-> server' in row.direction or 'remote -> client' in row.direction or 'device -> server' in row.direction else 'badge-info' }}">{{ row.direction }}</span></td>
           <td>{{ row.src_ip }}:{{ row.src_port }}</td>
           <td>{{ row.dst_ip }}:{{ row.dst_port }}</td>
           <td>{{ row.length }}</td>
           <td class="mono">{{ row.data_hex }}</td>
           <td>{{ row.data_text }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9">
+            <div class="empty-state">当前没有符合条件的协议包记录。</div>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
