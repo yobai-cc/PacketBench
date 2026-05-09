@@ -1,158 +1,149 @@
 {% extends "base.html" %}
-{% block title %}UDP Server{% endblock %}
+{% block title %}UDP Server · PacketBench{% endblock %}
 {% block content %}
-<div class="workbench-shell">
-  <section class="workbench-header">
+<div class="console-page udp-page">
+  <section class="console-hero console-hero-card">
     <div>
+      <p class="eyebrow">协议调试台</p>
       <h1>UDP Server</h1>
-      <p class="page-subtitle">监听设备 UDP 报文，按固定规则自动回复，并可手动向当前目标来源发送数据。</p>
+      <p class="page-subtitle">监听设备 UDP 报文，维护来源地址列表，按固定规则自动回复，并可手动向当前目标发送数据。</p>
       {% if message %}<div class="alert success">{{ message }}</div>{% endif %}
       {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
     </div>
     {% if current_user.role != 'viewer' %}
-    <div class="header-actions">
-      <div class="button-row">
-        <form method="post" action="/udp-server/start"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" {% if udp.running %}disabled title="UDP 服务已在运行"{% endif %}>启动服务</button></form>
-        <form method="post" action="/udp-server/stop"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="danger" {% if not udp.running %}disabled title="UDP 服务尚未启动"{% endif %}>停止服务</button></form>
-      </div>
+    <div class="hero-actions hero-actions-card">
+      <form method="post" action="/udp-server/start">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" {% if udp.running %}disabled title="UDP 服务已在运行"{% endif %}>启动</button>
+      </form>
+      <form method="post" action="/udp-server/stop">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="danger" {% if not udp.running %}disabled title="UDP 服务尚未启动"{% endif %}>停止</button>
+      </form>
     </div>
     {% endif %}
   </section>
 
-  <section class="status-strip">
-    <div class="status-card">
-      <span>服务状态</span>
-      <strong class="status-pill {{ 'status-running' if udp.running else 'status-idle' }}">{{ '运行中' if udp.running else '未启动' }}</strong>
+  <section class="listener-config-band">
+    <article class="panel config-panel config-panel-primary control-panel">
+      <div class="panel-title-row">
+        <div>
+          <p class="eyebrow">监听配置</p>
+          <h2>绑定与载荷设置</h2>
+        </div>
+        <span class="badge badge-warning">需重启生效</span>
+      </div>
+      <p class="panel-note">核心监听配置：修改绑定地址、端口或 HEX 解析模式后，重新启动 UDP 服务使配置生效。</p>
+      <form method="post" action="/udp-server/config" class="listener-config-form listener-config-grid">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="listener-config-fields listener-config-primary-row">
+          <label>绑定 IP<input name="bind_ip" class="mono" value="{{ udp.bind_ip }}" required {% if current_user.role == 'viewer' %}disabled{% endif %}></label>
+          <label>绑定端口<input name="bind_port" class="mono" type="number" value="{{ udp.bind_port }}" required {% if current_user.role == 'viewer' %}disabled{% endif %}></label>
+          <label>解析模式<div class="segmented-control mode-segmented"><label><input type="radio" name="hex_mode_radio" value="off" {% if not udp.hex_mode %}checked{% endif %} {% if current_user.role == 'viewer' %}disabled{% endif %}><span>文本</span></label><label><input type="radio" name="hex_mode_radio" value="on" {% if udp.hex_mode %}checked{% endif %} {% if current_user.role == 'viewer' %}disabled{% endif %}><span>十六进制</span></label></div></label>
+          <label>自动回复
+            <select name="reply_mode" {% if current_user.role == 'viewer' %}disabled{% endif %}>
+              <option value="fixed" {% if udp.custom_reply_data %}selected{% endif %}>开启</option>
+              <option value="off" {% if not udp.custom_reply_data %}selected{% endif %}>关闭</option>
+            </select>
+          </label>
+        </div>
+        <div class="listener-config-reply-row">
+          <label class="payload-config-field">自定义回复数据<input type="text" name="custom_reply_data" class="mono" id="reply_data_textarea" placeholder="ACK 或 41 43 4B" value="{{ udp.custom_reply_data if udp.custom_reply_data else '' }}" {% if current_user.role == 'viewer' or not udp.custom_reply_data %}disabled{% endif %} {% if current_user.role == 'viewer' %}data-viewer{% endif %}></label>
+          {% if current_user.role != 'viewer' %}<div class="listener-config-actions"><button type="submit">保存配置</button></div>{% endif %}
+        </div>
+      </form>
+    </article>
+  </section>
+
+  <section class="status-strip console-status-strip" data-variant="udp-v2">
+    <div class="status-card status-card-primary {{ 'status-card-running' if udp.running else 'status-card-idle' }}">
+      <span>监听状态</span>
+      <strong class="status-pill {{ 'status-running' if udp.running else 'status-idle' }}">{{ '运行中' if udp.running else '已停止' }}</strong>
+      <small>{{ '可接收报文' if udp.running else '启动后接收对端' }}</small>
     </div>
     <div class="status-card">
-      <span>绑定地址</span>
-      <strong>{{ udp.bind_ip }}:{{ udp.bind_port }}</strong>
+      <span>绑定 IP</span>
+      <strong class="mono">{{ udp.bind_ip }}</strong>
     </div>
     <div class="status-card">
-      <span>最近来源 / 当前目标</span>
-      <strong>{{ current_target_label }}</strong>
+      <span>绑定端口</span>
+      <strong class="mono">{{ udp.bind_port }}</strong>
     </div>
     <div class="status-card">
-      <span>RX</span>
-      <strong>{{ udp.rx_count }} bytes</strong>
+      <span>当前目标</span>
+      <strong class="mono">{{ current_target_label }}</strong>
     </div>
     <div class="status-card">
-      <span>TX</span>
-      <strong>{{ udp.tx_count }} bytes</strong>
+      <span>RX / TX</span>
+      <strong>{{ udp.rx_count }} / {{ udp.tx_count }} B</strong>
     </div>
   </section>
 
-  <section class="workspace-grid">
-    <div class="workspace-main">
-      <article class="panel">
-        <h2>基础设置</h2>
-        <p class="panel-note">修改绑定地址后，重新启动 UDP 服务使配置生效。</p>
-        <form method="post" action="/udp-server/config">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <div class="compact-form-row">
-            <label>绑定 IP<input name="bind_ip" value="{{ udp.bind_ip }}" required {% if current_user.role == 'viewer' %}disabled{% endif %}></label>
-            <label>绑定端口<input name="bind_port" type="number" value="{{ udp.bind_port }}" required {% if current_user.role == 'viewer' %}disabled{% endif %}></label>
+  <section class="udp-layout">
+    <div class="udp-main" data-column="udp-data">
+      <article class="panel peers-panel prominent-panel">
+        <div class="panel-title-row">
+          <div>
+            <p class="eyebrow">对端</p>
+            <h2>UDP 对端列表</h2>
           </div>
-          <label class="checkbox"><input name="hex_mode" type="checkbox" {% if udp.hex_mode %}checked{% endif %} {% if current_user.role == 'viewer' %}disabled{% endif %}> 发送和自动回复均按 HEX 解析</label>
-          {% if current_user.role != 'viewer' %}<button type="submit">保存配置</button>{% endif %}
-        </form>
-      </article>
-
-      <article class="panel">
-        <h2>发送区</h2>
-        <p><strong>当前目标来源地址：</strong>{{ current_target_label }}</p>
-        <p class="panel-note">如果没有目标来源地址，请先等待设备来包并在来源地址列表中设为当前目标。</p>
-        {% if current_user.role != 'viewer' %}
-        <form method="post" action="/udp-server/send">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <label>发送内容<textarea name="payload"></textarea></label>
-          <div class="button-row compact">
-            <button type="submit" {% if not udp.running or current_target_label == '无' %}disabled title="请先启动 UDP 服务并指定一个目标来源地址"{% endif %}>发送</button>
-            <button type="reset" class="ghost">清空</button>
-          </div>
-        </form>
-        {% if not udp.running or current_target_label == '无' %}
-        <p class="card-help">请先启动 UDP 服务，并等待设备来包或指定当前目标来源地址。</p>
-        {% endif %}
-        {% else %}
-        <p>Viewer 角色仅可查看 UDP 运行状态。</p>
-        {% endif %}
-      </article>
-
-      <article class="panel">
-        <h2>自动回复</h2>
-        <p class="panel-note">开启后，收到报文会立即按下方配置回发；内容为空时不回包。</p>
-        <form method="post" action="/udp-server/config">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <input type="hidden" name="bind_ip" value="{{ udp.bind_ip }}">
-          <input type="hidden" name="bind_port" value="{{ udp.bind_port }}">
-          <label>回复模式
-            <select name="reply_mode" {% if current_user.role == 'viewer' %}disabled{% endif %}>
-              <option value="fixed" {% if udp.custom_reply_data %}selected{% endif %}>固定回复</option>
-              <option value="off" {% if not udp.custom_reply_data %}selected{% endif %}>关闭回复</option>
-            </select>
-          </label>
-          <label>回复内容<textarea name="custom_reply_data" id="reply_data_textarea" {% if current_user.role == 'viewer' or not udp.custom_reply_data %}disabled{% endif %}>{{ udp.custom_reply_data }}</textarea></label>
-          {% if current_user.role != 'viewer' %}<button type="submit">保存规则</button>{% endif %}
-        </form>
-      </article>
-    </div>
-
-    <div class="workspace-side">
-      <article class="panel">
-        <h2>来源地址列表</h2>
-        <p class="panel-note">基于最近收到的 UDP 报文维护活跃来源，手动发送默认发往当前目标。</p>
-        <div class="table-wrap">
-          <table>
+          <span class="badge badge-muted">{{ udp.peers|length }} 个对端</span>
+        </div>
+        <p class="panel-note">启动监听后，向 <span class="mono">{{ udp.bind_ip }}:{{ udp.bind_port }}</span> 发送 UDP 报文；可选择一个来源地址作为手动回复目标。</p>
+        <div class="table-wrap dense-table peers-table-wrap">
+          <table class="peers-table">
             <thead>
-              <tr><th>来源地址</th><th>首次出现</th><th>最近活动</th><th>收包</th><th>发包</th><th>状态</th><th>操作</th></tr>
+              <tr><th>来源</th><th>首次出现</th><th>最近出现</th><th class="num">接收</th><th class="num">发送</th><th>状态</th><th>操作</th></tr>
             </thead>
             <tbody>
               {% for peer in udp.peers %}
-              <tr>
-                <td class="mono">{{ peer.peer_addr }}</td>
+              <tr class="{{ 'selected-row' if peer.is_current_target else '' }}">
+                <td class="mono strong-cell">{{ peer.peer_addr }}</td>
                 <td>{{ peer.first_seen }}</td>
                 <td>{{ peer.last_seen }}</td>
-                <td>{{ peer.rx_packets }} / {{ peer.rx_bytes }} B</td>
-                <td>{{ peer.tx_packets }} / {{ peer.tx_bytes }} B</td>
-                <td>{{ '当前目标' if peer.is_current_target else '活跃' if peer.status == 'active' else '空闲' }}</td>
+                <td class="num">{{ peer.rx_packets }} / {{ peer.rx_bytes }} B</td>
+                <td class="num">{{ peer.tx_packets }} / {{ peer.tx_bytes }} B</td>
+                <td><span class="badge {{ 'badge-success' if peer.is_current_target else 'badge-info' if peer.status == 'active' else 'badge-muted' }}">{{ '当前' if peer.is_current_target else '活跃' if peer.status == 'active' else '空闲' }}</span></td>
                 <td>
                   {% if current_user.role != 'viewer' %}
                   <div class="inline-actions">
                     {% if peer.is_current_target %}
-                    <span class="muted" style="font-size: 12px; padding: 4px 8px;">(当前目标)</span>
+                    <span class="badge badge-success">已选中</span>
                     {% else %}
                     <form method="post" action="/udp-server/target">
                       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                       <input type="hidden" name="peer_addr" value="{{ peer.peer_addr }}">
-                      <button type="submit" class="ghost">设为当前目标</button>
+                      <button type="submit" class="ghost">选择</button>
                     </form>
                     {% endif %}
                     <form method="post" action="/udp-server/peer/remove">
                       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                       <input type="hidden" name="peer_addr" value="{{ peer.peer_addr }}">
-                      <button type="submit" class="danger ghost-danger">移除记录</button>
+                      <button type="submit" class="danger ghost-danger">移除</button>
                     </form>
                   </div>
                   {% else %}
-                  只读
+                  <span class="muted">只读</span>
                   {% endif %}
                 </td>
               </tr>
               {% else %}
-              <tr>
-                <td colspan="7">暂无来源地址，请先等待来包。</td>
-              </tr>
+              <tr><td colspan="7" class="empty-cell rich-empty"><strong>尚无 UDP 对端</strong><span>请先启动监听，再向 {{ udp.bind_ip }}:{{ udp.bind_port }} 发送 UDP 报文。</span></td></tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
       </article>
 
-      <article class="panel">
-        <h2>日志区</h2>
-        <form method="get" action="/udp-server" class="filter-row">
-          <label>关键字<input name="q" value="{{ query_text }}"></label>
+      <article class="panel logs-panel prominent-panel">
+        <div class="panel-title-row">
+          <div>
+            <p class="eyebrow">流量</p>
+            <h2>近期 UDP 报文日志</h2>
+          </div>
+        </div>
+        <form method="get" action="/udp-server" class="filter-row compact-filter-row">
+          <label>关键词<input name="q" value="{{ query_text }}"></label>
           <label>类型
             <select name="log_type">
               <option value="" {% if not selected_log_type %}selected{% endif %}>全部</option>
@@ -163,35 +154,74 @@
             </select>
           </label>
           <label>来源 IP<input name="source_ip" value="{{ selected_source_ip }}"></label>
-          <label>最近 N 条<input type="number" name="limit" value="{{ log_limit }}"></label>
-          <button type="submit">筛选</button>
+          <label>数量上限<input type="number" name="limit" value="{{ log_limit }}"></label>
+          <button type="submit" class="filter-button">筛选</button>
         </form>
-        <div class="log-scroll">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>时间</th><th>类型</th><th>对端</th><th>长度</th><th>内容摘要</th><th>详情</th></tr>
-            </thead>
-            <tbody>
-              {% for row in udp_logs %}
-              <tr>
-                <td>{{ row.created_at_text }}</td>
-                <td>{{ row.type }}</td>
-                <td class="mono">{{ row.peer }}</td>
-                <td>{{ row.length }}</td>
-                <td>{{ row.summary }}</td>
-                <td class="mono">{{ row.detail }}</td>
-              </tr>
-              {% else %}
-              <tr>
-                <td colspan="6">当前没有符合条件的 UDP 日志。</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+        <div class="log-scroll" data-enhanced-scroll="udp-log">
+          <div class="table-wrap dense-table">
+            <table class="udp-log-table">
+              <thead><tr><th>时间</th><th>类型</th><th>对端</th><th class="num">长度</th><th>摘要</th><th>详情</th></tr></thead>
+              <tbody>
+                {% for row in udp_logs %}
+                <tr>
+                  <td class="mono muted time-cell">{{ row.created_at_text }}</td>
+                  <td><span class="badge {{ 'badge-danger' if row.type == '异常' else 'badge-info' if row.type == '系统' else 'badge-success' if row.type == '接收' else 'badge-warning' }}">{{ row.type }}</span></td>
+                  <td class="mono peer-cell">{{ row.peer }}</td>
+                  <td class="num length-cell">{{ row.length }} B</td>
+                  <td class="summary-cell">{{ row.summary }}</td>
+                  <td class="mono payload-cell">{{ row.detail }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="empty-cell rich-empty"><strong>暂无 UDP 日志</strong><span>报文和系统事件会在有流量后显示在这里。</span></td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
       </article>
+    </div>
+
+    <div class="udp-side manual-reply-panel" data-column="udp-controls">
+      <article class="panel target-panel control-panel">
+        <div class="panel-title-row">
+          <div>
+            <p class="eyebrow">已选对端</p>
+            <h2>当前目标</h2>
+          </div>
+          <span class="status-pill {{ 'status-running' if current_target_label != '无' else 'status-idle' }}">{{ '已选择' if current_target_label != '无' else '未选择' }}</span>
+        </div>
+        <div class="target-display mono {{ 'empty-target' if current_target_label == '无' else '' }}">{{ current_target_label }}</div>
+        <dl class="service-stats two-col target-stats">
+          <div><dt>最近来源</dt><dd>{{ last_source_label }}</dd></div>
+          <div><dt>已知对端</dt><dd>{{ udp.peers|length }}</dd></div>
+        </dl>
+        {% if current_target_label == '无' %}<p class="panel-note compact-note target-empty-hint">未选择目标。收到 UDP 报文后，可在对端列表中选择一个来源地址。</p>{% endif %}
+      </article>
+
+      <article class="panel send-panel control-panel">
+        <div class="panel-title-row">
+          <div>
+            <p class="eyebrow">手动操作</p>
+            <h2>手动发送回复</h2>
+          </div>
+          <span class="badge {{ 'badge-success' if udp.running and current_target_label != '无' else 'badge-muted' }}">{{ '可发送' if udp.running and current_target_label != '无' else '等待目标' }}</span>
+        </div>
+        <p class="panel-note">发送到当前目标；未选择目标时请先等待设备来包。</p>
+        {% if current_user.role != 'viewer' %}
+        <form method="post" action="/udp-server/send">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label>载荷<textarea name="payload" placeholder="ACK 或 41 43 4B"></textarea></label>
+          <div class="button-row compact">
+            <button type="submit" {% if not udp.running or current_target_label == '无' %}disabled title="请先启动 UDP 服务并指定一个目标来源地址"{% endif %}>发送</button>
+            <button type="reset" class="ghost">清空</button>
+          </div>
+        </form>
+        {% else %}
+        <p>访客角色仅可查看 UDP 运行状态。</p>
+        {% endif %}
+      </article>
+
+
     </div>
   </section>
 </div>

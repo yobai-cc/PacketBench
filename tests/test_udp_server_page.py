@@ -129,26 +129,27 @@ def test_update_udp_config_accepts_bind_and_reply_fields_only(monkeypatch: pytes
     response = update_udp_config(
         request,
         bind_ip="127.0.0.1",
-        bind_port=9000,
-        custom_reply_data="reply",
-        reply_mode="fixed",
-        hex_mode="on",
-        user=user,
-        db=None,
-    )
+            bind_port=9000,
+            custom_reply_data="reply",
+            reply_mode="fixed",
+            hex_mode_radio="off",
+            hex_mode=None,
+            user=user,
+            db=None,
+        )
 
     body = response.body.decode("utf-8")
     assert captured_payload == [
         {
-            "bind_ip": "127.0.0.1",
-            "bind_port": 9000,
-            "custom_reply_data": "reply",
-            "hex_mode": True,
-        }
-    ]
+                "bind_ip": "127.0.0.1",
+                "bind_port": 9000,
+                "custom_reply_data": "reply",
+                "hex_mode": False,
+            }
+        ]
     assert "自动回复" in body
-    assert "回复内容" in body
-    assert "云端 IP" not in body
+    assert "自定义回复数据" in body
+    assert "Cloud" not in body
     assert "UDP 配置已更新" in body
     assert logs[-1] == ("info", "config", "UDP config updated by operator-user", "")
 
@@ -217,13 +218,14 @@ def test_update_udp_config_preserves_reply_when_basic_form_omits_reply_fields(mo
         update_udp_config(
             request,
             bind_ip="127.0.0.1",
-            bind_port=9001,
-            custom_reply_data=None,
-            reply_mode=None,
-            hex_mode="on",
-            user=user,
-            db=None,
-        )
+                bind_port=9001,
+                custom_reply_data=None,
+                reply_mode=None,
+                hex_mode_radio=None,
+                hex_mode=None,
+                user=user,
+                db=None,
+            )
     finally:
         runtime_manager.udp_server.update_config(UDPServerConfig())
 
@@ -254,13 +256,14 @@ def test_update_udp_config_preserves_hex_mode_when_reply_form_omits_hex_field(mo
         update_udp_config(
             request,
             bind_ip="127.0.0.1",
-            bind_port=9000,
-            custom_reply_data="new-reply",
-            reply_mode="fixed",
-            hex_mode=None,
-            user=user,
-            db=None,
-        )
+                bind_port=9000,
+                custom_reply_data="new-reply",
+                reply_mode="fixed",
+                hex_mode_radio=None,
+                hex_mode=None,
+                user=user,
+                db=None,
+            )
     finally:
         runtime_manager.udp_server.update_config(UDPServerConfig())
 
@@ -305,18 +308,41 @@ def test_udp_page_uses_reworked_layout_sections(client, db_engine) -> None:
     response = client.get("/udp-server")
 
     assert response.status_code == 200
-    assert "服务状态" in response.text
-    assert "基础设置" in response.text
-    assert "来源地址列表" in response.text
-    assert "自动回复" in response.text
-    assert "日志区" in response.text
+    assert "监听状态" in response.text
+    assert "监听配置" in response.text
+    assert "UDP 对端列表" in response.text
+    assert "近期 UDP 报文日志" in response.text
+    assert "协议调试台" in response.text
+    assert "绑定与载荷设置" in response.text
+    assert "当前目标" in response.text
+    assert "手动发送回复" in response.text
+    assert "启动监听后，向" in response.text
+    assert "选择一个来源地址作为手动回复目标" in response.text
+    assert "尚无 UDP 对端" in response.text
+    assert "摘要" in response.text
+    assert "详情" in response.text
+    assert "发送到当前目标" in response.text
+    assert "Protocol Workbench" not in response.text
+    assert "Listener Configuration" not in response.text
+    assert "Bind & Payload Settings" not in response.text
+    assert "Restart required" not in response.text
+    assert "Start the listener" not in response.text
+    assert "Select one peer as the manual reply target" not in response.text
+    assert "No UDP peers yet" not in response.text
+    assert "Packet and system events will appear here" not in response.text
+    assert "Send Manual Reply" not in response.text
     assert 'class="log-scroll"' in response.text
-    assert "实时日志" not in response.text
     assert 'class="ghost"' in response.text
     assert '<select name="reply_mode"' in response.text
     assert '<select disabled>' not in response.text
-    assert "发送和自动回复均按 HEX 解析" in response.text
-    assert "文本 / HEX" not in response.text
+    assert "Parse send and auto-reply payloads as HEX" not in response.text
+    assert "文本" in response.text
+    assert "十六进制" in response.text
+    assert 'class="listener-config-fields listener-config-primary-row"' in response.text
+    assert 'class="listener-config-reply-row"' in response.text
+    assert 'class="payload-config-field"' in response.text
+    assert 'manual-reply-panel' in response.text
+    assert 'target-empty-hint' in response.text
 
 
 def test_udp_page_uses_operations_console_layout(client, db_engine) -> None:
@@ -328,11 +354,11 @@ def test_udp_page_uses_operations_console_layout(client, db_engine) -> None:
     response = client.get("/udp-server")
 
     assert response.status_code == 200
-    assert 'class="workbench-shell"' in response.text
-    assert 'class="status-strip"' in response.text
-    assert 'class="workspace-grid"' in response.text
-    assert 'class="workspace-main"' in response.text
-    assert 'class="workspace-side"' in response.text
+    assert 'class="console-page udp-page"' in response.text
+    assert 'class="status-strip console-status-strip"' in response.text
+    assert 'class="udp-layout"' in response.text
+    assert 'class="udp-main"' in response.text
+    assert 'udp-side' in response.text
     assert 'class="status-pill status-idle"' in response.text
 
 
@@ -349,8 +375,8 @@ def test_udp_page_renders_peer_table_and_target_summary(client, db_engine) -> No
 
         assert response.status_code == 200
         assert "10.0.0.8:4567" in response.text
-        assert "当前目标来源地址" in response.text
-        assert "设为当前目标" in response.text
+        assert "当前目标" in response.text
+        assert "选择" in response.text
     finally:
         runtime_manager.udp_server.peers.clear()
         runtime_manager.udp_server.current_target_addr = None
@@ -381,7 +407,7 @@ async def test_select_udp_target_updates_page_state(tmp_path, monkeypatch: pytes
             response = select_udp_target(request, peer_addr="10.1.2.3:4567", user=user, db=db)
 
         body = response.body.decode("utf-8")
-        assert "当前目标来源地址" in body
+        assert "当前目标" in body
         assert "10.1.2.3:4567" in body
         assert "已切换当前目标来源" in body
         assert logs[-1] == ("info", "network", "UDP target selected by operator-user", "10.1.2.3:4567")
@@ -424,7 +450,7 @@ def test_udp_page_filters_packet_and_system_logs(client, db_engine) -> None:
 
     rx_response = client.get("/udp-server?log_type=rx&q=ping")
     assert rx_response.status_code == 200
-    assert "内容摘要" in rx_response.text
+    assert "摘要" in rx_response.text
     assert "ping" in rx_response.text
     assert "接收" in rx_response.text
     assert "2026-04-10 23:08:23" in rx_response.text

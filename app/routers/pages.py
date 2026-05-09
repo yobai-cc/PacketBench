@@ -196,6 +196,42 @@ def _runtime_log_rows(
     return rows[:limit]
 
 
+def _recent_packet_rows(db: Session | None, *, limit: int = 8) -> list[dict[str, object]]:
+    if db is None or not hasattr(db, "query"):
+        return []
+    rows: list[dict[str, object]] = []
+    for row in db.query(PacketLog).order_by(PacketLog.created_at.desc()).limit(limit).all():
+        rows.append(
+            {
+                "created_at_text": _format_utc_minus_8(row.created_at),
+                "service": row.service_type,
+                "protocol": row.protocol,
+                "direction": row.direction,
+                "source": f"{row.src_ip}:{row.src_port}",
+                "destination": f"{row.dst_ip}:{row.dst_port}",
+                "length": row.length,
+                "summary": row.data_text or row.data_hex or "-",
+            }
+        )
+    return rows
+
+
+def _recent_system_events(db: Session | None, *, limit: int = 6) -> list[dict[str, object]]:
+    if db is None or not hasattr(db, "query"):
+        return []
+    rows: list[dict[str, object]] = []
+    for row in db.query(SystemLog).order_by(SystemLog.created_at.desc()).limit(limit).all():
+        rows.append(
+            {
+                "created_at_text": _format_utc_minus_8(row.created_at),
+                "level": row.level,
+                "category": row.category,
+                "message": row.message,
+            }
+        )
+    return rows
+
+
 def _udp_page_context(
     request: Request,
     user: User,
@@ -304,12 +340,21 @@ def root() -> RedirectResponse:
 
 @router.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    udp_snapshot = runtime_manager.udp_snapshot()
+    tcp_snapshot = runtime_manager.tcp_snapshot()
+    client_snapshot = runtime_manager.client_snapshot()
     context = _base_context(request, user)
     context.update(
         {
-            "udp": runtime_manager.udp_snapshot(),
+            "udp": udp_snapshot,
+            "tcp": tcp_snapshot,
+            "client_runtime": client_snapshot,
             "packet_count": db.query(PacketLog).count(),
             "system_log_count": db.query(SystemLog).count(),
+            "known_udp_peers": len(udp_snapshot.get("peers") or []),
+            "active_tcp_clients": len(tcp_snapshot.get("clients") or []),
+            "recent_packets": _recent_packet_rows(db, limit=8),
+            "recent_events": _recent_system_events(db, limit=6),
         }
     )
     return templates.TemplateResponse(request, "dashboard.html", context)
@@ -336,16 +381,22 @@ def update_udp_config(
     bind_port: int = Form(...),
     custom_reply_data: str | None = Form(default=None),
     reply_mode: str | None = Form(default=None),
+    hex_mode_radio: str | None = Form(default=None),
     hex_mode: str | None = Form(default=None),
     user: User = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
- ):
+):
     current_snapshot = runtime_manager.udp_snapshot()
     if reply_mode is None:
         reply_payload = str(current_snapshot["custom_reply_data"])
     else:
         reply_payload = custom_reply_data or "" if reply_mode == "fixed" else ""
-    hex_enabled = bool(current_snapshot["hex_mode"]) if hex_mode is None else hex_mode == "on"
+
+    if hex_mode_radio is not None:
+        hex_enabled = hex_mode_radio == "on"
+    else:
+        hex_enabled = bool(current_snapshot["hex_mode"]) if hex_mode is None else hex_mode == "on"
+
     runtime_manager.apply_udp_config(
         {
             "bind_ip": bind_ip,

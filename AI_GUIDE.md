@@ -7,7 +7,7 @@
 - 仓库：`https://github.com/yobai-cc/PacketBench`
 - 本地路径：`/home/yobai/PacketBench`
 - 主线分支：`master`
-- 产品版本：`v0.1.0`
+- 产品版本：`v0.1.0` (UI 已推进至 v5 重构)
 - 技术栈：FastAPI + Jinja2 + SQLAlchemy + SQLite + asyncio TCP/UDP runtime
 
 ## 2. 最重要的维护原则
@@ -19,6 +19,7 @@
    ```
 
 2. 通用功能和通用 bugfix 进 `master`。
+3. 根据用户偏好，前端 UI 的更新不再死板遵循 `前端设计 skill` 的全套流程（即可以跳过专门画图和评审环节），优先按照现有页面观感、设计图直接进行迭代，并且核心控制面板必须在首屏免下拉可见。
 3. Ubuntu 或具体交付现场特化内容不要直接写进 `master`，优先考虑 `release/ubuntu-v0.1.0`。
 4. 不要把旧 UDP relay / cloud 双模式语义带回当前主线。当前 UDP 是固定自动回复单模式。
 5. 不要未经明确要求修改项目名、版本号、session cookie 名、systemd 服务名、部署路径、远端地址、tag、release 策略。
@@ -100,6 +101,7 @@ pytest tests/test_filters_pages.py
 | Dashboard | `app/routers/pages.py`, `app/templates/dashboard.html` |
 | UDP Server | `app/services/udp_server.py`, `app/templates/udp_server.html`, `/udp-server*` 路由 |
 | TCP Server | `app/services/tcp_server.py`, `app/templates/tcp_server.html`, `/tcp-server*` 路由 |
+| 样式微调与布局重构 | `app/static/v3.css`, `app/static/v4.css`, `app/static/app.css` |
 | TCP/UDP Client | `app/services/client_runtime.py`, `app/templates/client.html`, `/client*` 路由 |
 | 协议包日志 | `app/models/packet_log.py`, `app/services/packet_logger.py`, `/packets` 路由 |
 | 系统日志 | `app/models/system_log.py`, `app/services/logging_service.py`, `/logs` 路由 |

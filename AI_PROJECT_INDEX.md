@@ -38,6 +38,7 @@ PacketBench 是一个轻量级 Web 版 TCP/UDP 调试工作台，使用 FastAPI 
 
 - Jinja2 模板：`app/templates/`
 - 静态资源：`app/static/app.css`、`app/static/app.js`
+- 视觉与布局重构覆盖：`app/static/v3.css`（高密度视觉优化）、`app/static/v4.css`（表单布局与控制台重点面板结构调整）。整体前端风格采用类 Linear/Vercel 的高品质暗色主题，强调信息密度、状态条（Status Strip）和全宽配置面板。
 - 页面交互主要通过普通 HTML 表单和服务端渲染返回页面完成；状态变更 POST 需要 CSRF token。
 - `/ws/runtime` 提供运行态 WebSocket 能力；连接必须带已登录且仍有效的 active 用户 session，事件来源主要是 `system_log_service` 的系统日志广播。
 
@@ -350,7 +351,7 @@ SESSION_SECURE=false
 - `base.html`：全站基础布局。
 - `login.html`：登录页。
 - `dashboard.html`：概览页。
-- `udp_server.html`：UDP Server 页面。
+- `udp_server.html`：UDP Server 页面。页面结构遵循工程控制台范式：`Header -> Listener Configuration (置顶核心配置区) -> Status Strip (高度压缩的状态条) -> Workspace (左右分栏，左侧日志，右侧当前目标和手动回复)`。
 - `tcp_server.html`：TCP Server 页面。
 - `client.html`：TCP/UDP Client 页面。
 - `packets.html`：协议包日志页。

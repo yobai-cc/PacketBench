@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -102,7 +103,40 @@ def test_dashboard_does_not_show_nonfunctional_runtime_stream(client, db_engine)
     response = client.get("/dashboard")
 
     assert response.status_code == 200
-    assert "实时状态" not in response.text
-    assert "等待 WebSocket 数据" not in response.text
-    assert 'id="runtime-stream"' not in response.text
-    assert "页面使用刷新方式展示当前状态" in response.text
+    assert 'id="runtime-stream"' in response.text
+    assert "Runtime Event Stream" in response.text
+    assert "等待运行时事件" in response.text
+    assert "PacketBench Control Plane" in response.text
+    assert 'class="metric-card"' in response.text
+    assert 'class="service-card"' in response.text
+    assert "Recent Packet Log" in response.text
+
+
+def test_static_css_assets_are_consolidated_and_have_balanced_rule_blocks():
+    static_dir = Path("app/static")
+    assert not (static_dir / "v3.css").exists()
+    assert not (static_dir / "v4.css").exists()
+
+    css = (static_dir / "app.css").read_text(encoding="utf-8")
+    assert "Consolidated final UI polish" in css
+
+    balance = 0
+    for char in css:
+        if char == "{":
+            balance += 1
+        elif char == "}":
+            balance -= 1
+        assert balance >= 0
+
+    assert balance == 0
+
+
+def test_consolidated_css_keeps_final_dashboard_and_udp_polish():
+    css = Path("app/static/app.css").read_text(encoding="utf-8")
+
+    assert "grid-template-columns: 216px minmax(0, 1fr);" in css
+    assert ".listener-config-primary-row" in css
+    assert ".listener-config-reply-row" in css
+    assert ".payload-config-field" in css
+    assert ".dashboard-side .runtime-stream" in css
+    assert ".manual-reply-panel" in css
