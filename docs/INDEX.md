@@ -2,6 +2,10 @@
 
 ## Current State
 
+- `../AI_PROJECT_INDEX.md`
+  - 面向 AI 的项目源码索引、架构说明、入口文件、路由、模型、运行态和测试地图。
+- `../AI_GUIDE.md`
+  - 面向 AI 的接手操作手册，包含维护原则、验证命令、常见坑和交付前自检。
 - `../README.md`
   - 仓库首页总览，描述当前功能状态与运行入口。
 - `2026-04-09-development-status.md`

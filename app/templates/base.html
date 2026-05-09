@@ -25,6 +25,7 @@
         {% endif %}
       </nav>
       <form method="post" action="/logout" class="sidebar-logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="ghost" type="submit">退出登录</button>
       </form>
       {% endif %}

@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.auth.csrf import ensure_csrf_token
 from app.auth.security import verify_password
 from app.db import get_db
 from app.models.user import User
@@ -19,7 +20,7 @@ templates = Jinja2Templates(directory="app/templates")
 
 @router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    return templates.TemplateResponse(request, "login.html", {"error": None})
+    return templates.TemplateResponse(request, "login.html", {"error": None, "csrf_token": ensure_csrf_token(request), "current_user": None})
 
 
 @router.post("/login", response_class=HTMLResponse)
@@ -35,11 +36,12 @@ def login(
         return templates.TemplateResponse(
             request,
             "login.html",
-            {"error": "用户名或密码错误"},
+            {"error": "用户名或密码错误", "csrf_token": ensure_csrf_token(request), "current_user": None},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     request.session["user_id"] = user.id
+    ensure_csrf_token(request)
     user.last_login_at = datetime.now(timezone.utc)
     db.add(user)
     db.commit()

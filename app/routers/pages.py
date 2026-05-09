@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.auth.csrf import ensure_csrf_token
 from app.auth.deps import get_current_user, require_role
 from app.auth.security import hash_password
 from app.db import get_db
@@ -27,7 +28,7 @@ UTC_PLUS_8 = timezone(timedelta(hours=8))
 
 
 def _base_context(request: Request, user: User) -> dict[str, object]:
-    return {"request": request, "current_user": user}
+    return {"request": request, "current_user": user, "csrf_token": ensure_csrf_token(request)}
 
 
 def _format_utc_minus_8(value) -> str:

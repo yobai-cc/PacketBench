@@ -12,8 +12,8 @@
     {% if current_user.role != 'viewer' %}
     <div class="header-actions">
       <div class="button-row">
-        <form method="post" action="/tcp-server/start"><button data-action="tcp-start" {% if tcp.running %}disabled title="TCP 服务已在运行"{% endif %} type="submit">启动监听</button></form>
-        <form method="post" action="/tcp-server/stop"><button data-action="tcp-stop" {% if not tcp.running %}disabled title="TCP 服务尚未启动"{% endif %} type="submit" class="danger">停止监听</button></form>
+        <form method="post" action="/tcp-server/start"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button data-action="tcp-start" {% if tcp.running %}disabled title="TCP 服务已在运行"{% endif %} type="submit">启动监听</button></form>
+        <form method="post" action="/tcp-server/stop"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button data-action="tcp-stop" {% if not tcp.running %}disabled title="TCP 服务尚未启动"{% endif %} type="submit" class="danger">停止监听</button></form>
       </div>
     </div>
     {% endif %}
@@ -48,6 +48,7 @@
         <h2>监听配置</h2>
         <p class="panel-note">修改监听地址后，重新启动 TCP 服务使配置生效。</p>
         <form method="post" action="/tcp-server/config">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <div class="compact-form-row">
             <label>绑定 IP<input name="bind_ip" value="{{ tcp.bind_ip }}" required></label>
             <label>绑定端口<input name="bind_port" type="number" value="{{ tcp.bind_port }}" required></label>
@@ -61,6 +62,7 @@
         <h2>手动发送</h2>
         {% if current_user.role != 'viewer' %}
         <form method="post" action="/tcp-server/send">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <label>
             目标客户端
             <select name="client_id" required>
@@ -106,6 +108,7 @@
                 <td>
                   {% if current_user.role != 'viewer' %}
                   <form method="post" action="/tcp-server/disconnect">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <input type="hidden" name="client_id" value="{{ client.client_id }}">
                     <button type="submit" class="danger">断开</button>
                   </form>

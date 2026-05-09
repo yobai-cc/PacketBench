@@ -1,3 +1,5 @@
+import re
+
 from sqlalchemy.orm import Session
 
 from app.auth.security import hash_password
@@ -58,9 +60,11 @@ def test_operator_can_update_client_config_through_real_post(client, db_engine):
         db.commit()
 
     login_as(client, "operator", "secret123")
+    page = client.get("/client")
+    token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
     response = client.post(
         "/client/config",
-        data={"protocol": "UDP", "target_ip": "127.0.0.1", "target_port": "9201", "hex_mode": "on"},
+        data={"protocol": "UDP", "target_ip": "127.0.0.1", "target_port": "9201", "hex_mode": "on", "csrf_token": token},
     )
 
     assert response.status_code == 200

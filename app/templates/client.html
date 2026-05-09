@@ -12,8 +12,8 @@
     {% if current_user.role != 'viewer' %}
     <div class="header-actions">
       <div class="button-row">
-        <form method="post" action="/client/connect"><button data-action="client-connect" {% if client.running %}disabled title="Client 已在运行"{% endif %} type="submit">连接</button></form>
-        <form method="post" action="/client/disconnect"><button data-action="client-disconnect" {% if not client.running %}disabled title="Client 尚未连接"{% endif %} type="submit" class="danger">断开</button></form>
+        <form method="post" action="/client/connect"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button data-action="client-connect" {% if client.running %}disabled title="Client 已在运行"{% endif %} type="submit">连接</button></form>
+        <form method="post" action="/client/disconnect"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button data-action="client-disconnect" {% if not client.running %}disabled title="Client 尚未连接"{% endif %} type="submit" class="danger">断开</button></form>
       </div>
     </div>
     {% endif %}
@@ -49,6 +49,7 @@
         <p class="panel-note">Client 运行中不能修改配置；请先断开再切换协议或目标地址。</p>
         {% if current_user.role != 'viewer' %}
         <form method="post" action="/client/config">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <label>
             协议
             <select name="protocol" {% if client.running %}disabled{% endif %}>
@@ -74,6 +75,7 @@
         <h2>手动发送</h2>
         {% if current_user.role != 'viewer' %}
         <form method="post" action="/client/send">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <label>发送数据<textarea name="payload"></textarea></label>
           <button data-action="client-send" {% if not client.connected %}disabled title="请先连接 Client，再发送数据"{% endif %} type="submit">发送</button>
         </form>

@@ -3,8 +3,10 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.auth.csrf import assert_safe_production_settings
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -28,6 +30,11 @@ class Settings(BaseSettings):
     packet_log_file: str = Field(default="packets.log", alias="PACKET_LOG_FILE")
     session_cookie_name: str = Field(default="packetbench_session", alias="SESSION_COOKIE_NAME")
     session_secure: bool = Field(default=False, alias="SESSION_SECURE")
+
+    @model_validator(mode="after")
+    def validate_production_secrets(self) -> "Settings":
+        assert_safe_production_settings(self.app_env, self.secret_key, self.admin_password)
+        return self
 
     @property
     def app_log_path(self) -> Path:

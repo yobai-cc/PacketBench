@@ -11,6 +11,7 @@
     <h1>PacketBench 登录</h1>
     {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
     <form method="post" action="/login">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label>用户名<input name="username" required></label>
       <label>密码<input type="password" name="password" required></label>
       <button type="submit">登录</button>

@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
+from app.auth.csrf import CSRFMiddleware
 from app.config import get_settings
 from app.db import init_db
 from app.routers import auth, pages, ws
@@ -26,6 +27,7 @@ def create_app() -> FastAPI:
     settings.log_dir.mkdir(parents=True, exist_ok=True)
 
     app = FastAPI(title="PacketBench", version="v0.1.0", lifespan=lifespan)
+    app.add_middleware(CSRFMiddleware)
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.secret_key,

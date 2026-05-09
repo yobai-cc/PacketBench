@@ -1,3 +1,4 @@
+import re
 import warnings
 
 from sqlalchemy.orm import Session
@@ -79,7 +80,9 @@ def test_logout_clears_session_and_redirects(client, db_engine):
     )
     assert login_response.status_code == 303
 
-    logout_response = client.post("/logout", follow_redirects=False)
+    dashboard = client.get("/dashboard")
+    token = re.search(r'name="csrf_token" value="([^"]+)"', dashboard.text).group(1)
+    logout_response = client.post("/logout", data={"csrf_token": token}, follow_redirects=False)
 
     assert logout_response.status_code == 303
     assert logout_response.headers["location"] == "/login"

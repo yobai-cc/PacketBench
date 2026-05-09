@@ -12,6 +12,7 @@
   <article class="card">
     <h2>创建用户</h2>
     <form method="post" action="/users/create">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label>用户名<input name="username" required></label>
       <label>密码<input name="password" type="password" required></label>
       <label>
@@ -58,6 +59,7 @@
           <td>{{ item.last_login_at or '从未登录' }}</td>
           <td>
             <form method="post" action="/users/toggle">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <input type="hidden" name="user_id" value="{{ item.id }}">
               <button type="submit" class="{{ 'danger' if item.is_active else '' }}">
                 {{ '禁用' if item.is_active else '启用' }}
